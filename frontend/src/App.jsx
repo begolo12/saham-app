@@ -118,15 +118,26 @@ function LearningPanel({ summary, loading, onEvaluate }) {
   );
 }
 
-function PortfolioPanel({ portfolio, onSave, onDelete }) {
+function PortfolioPanel({ portfolio, onSave, onDelete, stocks = [] }) {
   const [form, setForm] = useState({ symbol: '', qty: '', avg_price: '' });
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const summary = portfolio?.summary || {};
   const positions = portfolio?.positions || [];
+  const symbolQuery = (form.symbol || '').toUpperCase();
+  const suggestions = (stocks || [])
+    .filter(s => symbolQuery && (s.symbol || '').toUpperCase().includes(symbolQuery))
+    .sort((a, b) => (a.symbol || '').localeCompare(b.symbol || ''))
+    .slice(0, 60);
+  const selectSuggestion = (stock) => {
+    setForm(prev => ({ ...prev, symbol: (stock.symbol || '').toUpperCase() }));
+    setShowSuggestions(false);
+  };
   const submit = (e) => {
     e.preventDefault();
     if (!form.symbol || !form.qty || !form.avg_price) return;
     onSave({ symbol: form.symbol, qty: Number(form.qty), avg_price: Number(form.avg_price) });
     setForm({ symbol: '', qty: '', avg_price: '' });
+    setShowSuggestions(false);
   };
   return <div style={{ padding: '0 16px 24px' }}>
     <div className="market-summary" style={{ margin: '0 0 12px 0' }}>
@@ -138,7 +149,30 @@ function PortfolioPanel({ portfolio, onSave, onDelete }) {
       </div>
     </div>
     <form className="portfolio-form" onSubmit={submit}>
-      <input placeholder="Kode (BBCA)" value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value.toUpperCase() })} />
+      <div className="portfolio-symbol-field">
+        <input
+          placeholder="Kode (BBCA)"
+          value={form.symbol}
+          onFocus={() => setShowSuggestions(Boolean(form.symbol))}
+          onChange={e => { setForm({ ...form, symbol: e.target.value.toUpperCase() }); setShowSuggestions(Boolean(e.target.value)); }}
+          autoComplete="off"
+        />
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="portfolio-autocomplete">
+            {suggestions.map(stock => (
+              <button
+                key={stock.symbol}
+                type="button"
+                className="portfolio-suggestion"
+                onMouseDown={e => { e.preventDefault(); selectSuggestion(stock); }}
+                onTouchStart={e => { e.preventDefault(); selectSuggestion(stock); }}
+              >
+                <b>{stock.symbol}</b><span>{stock.name || stock.sector || 'Saham IDX'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <input placeholder="Lot/lembar" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
       <input placeholder="Avg price" type="number" value={form.avg_price} onChange={e => setForm({ ...form, avg_price: e.target.value })} />
       <button>Simpan</button>
@@ -267,6 +301,7 @@ export default function App() {
   const [dailyReport, setDailyReport] = useState(null);
   const [authUser, setAuthUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [recommendationModalOpen, setRecommendationModalOpen] = useState(false);
 
   const touchStartY = useRef(0);
   const scrollRef = useRef(0);
@@ -413,7 +448,7 @@ export default function App() {
     else if (label === 'Pasar') { setTab('market'); setSelectedStock(null); }
     else if (label === 'Watchlist') { setTab('watchlist'); setSelectedStock(null); }
     else if (label === 'Sinyal') { setTab('signal'); setSelectedStock(null); if (!allStocks.length) fetchAllStocksCb(); }
-    else if (label === 'Porto') { setTab('portfolio'); setSelectedStock(null); fetchPortfolioCb(); }
+    else if (label === 'Porto') { setTab('portfolio'); setSelectedStock(null); fetchPortfolioCb(); if (!allStocks.length) fetchAllStocksCb(); }
     else if (label === 'Belajar') { setTab('learning'); setSelectedStock(null); fetchLearningSummaryCb(); }
   };
 
@@ -424,7 +459,7 @@ export default function App() {
     else if (newTab === 'market') setSegmentTab('Pasar');
     else if (newTab === 'watchlist') setSegmentTab('Watchlist');
     else if (newTab === 'signal') { setSegmentTab('Sinyal'); if (!allStocks.length) fetchAllStocksCb(); }
-    else if (newTab === 'portfolio') { setSegmentTab('Porto'); fetchPortfolioCb(); }
+    else if (newTab === 'portfolio') { setSegmentTab('Porto'); fetchPortfolioCb(); if (!allStocks.length) fetchAllStocksCb(); }
     else if (newTab === 'learning') { setSegmentTab('Belajar'); fetchLearningSummaryCb(); }
   };
 
@@ -473,6 +508,9 @@ export default function App() {
 
   // Default sort for signal tab
   const defaultSort = tab === 'signal' ? 'sinyal' : 'default';
+  const recommendedStocks = allStocks
+    .filter(s => s.signal === 'BUY' || s.signal === 'SELL')
+    .sort((a, b) => (b.signal_strength || 0) - (a.signal_strength || 0));
 
   if (!authChecked) return <div className="login-page"><div className="login-card"><p className="login-subtitle">Memeriksa sesi...</p></div></div>;
   if (!authUser) return <LoginPage onLogin={setAuthUser} />;
@@ -514,7 +552,7 @@ export default function App() {
         ) : tab === 'portfolio' ? (
           <>
             <AdminUsersPanel authUser={authUser} />
-            <PortfolioPanel portfolio={portfolio} onSave={savePositionCb} onDelete={deletePositionCb} />
+            <PortfolioPanel portfolio={portfolio} onSave={savePositionCb} onDelete={deletePositionCb} stocks={allStocks.length ? allStocks : topStocks} />
           </>
         ) : tab === 'learning' ? (
           <LearningPanel summary={learningSummary} loading={learningLoading} onEvaluate={handleEvaluateLearning} />
@@ -563,6 +601,20 @@ export default function App() {
                       <span>{marketSummary.high_52w?.toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+
+            {tab === 'signal' && recommendedStocks.length > 0 && (
+              <div className="recommendation-strip">
+                <div className="recommendation-strip-head"><span>Sinyal Terkuat Hari Ini</span><button onClick={() => setRecommendationModalOpen(true)}>See More</button></div>
+                <div className="recommendation-strip-list">
+                  {recommendedStocks.slice(0, 5).map(stock => (
+                    <button key={stock.symbol} className="recommendation-pill" onClick={() => handleSelectStock(stock)}>
+                      <b>{stock.symbol}</b><SignalBadge signal={stock.signal} strength={stock.signal_strength} />
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -655,6 +707,23 @@ export default function App() {
           </div>
         )}
       </main>
+
+
+      {recommendationModalOpen && (
+        <div className="recommendation-modal-backdrop" onClick={() => setRecommendationModalOpen(false)}>
+          <div className="recommendation-modal" onClick={e => e.stopPropagation()}>
+            <div className="recommendation-modal-header"><div><b>Semua Sinyal</b><span>{recommendedStocks.length} rekomendasi aktif</span></div><button onClick={() => setRecommendationModalOpen(false)}>Tutup</button></div>
+            <div className="recommendation-modal-list">
+              {recommendedStocks.map(stock => (
+                <button key={stock.symbol} className="recommendation-modal-item" onClick={() => { setRecommendationModalOpen(false); handleSelectStock(stock); }}>
+                  <div><b>{stock.symbol}</b><span>{stock.name || stock.sector}</span></div>
+                  <SignalBadge signal={stock.signal} strength={stock.signal_strength} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!showDetail && (
         <nav className="bottom-segmented-nav" aria-label="Navigasi utama">

@@ -32,22 +32,27 @@ const TABS = ['Teknikal', 'Fundamental', 'Sinyal', 'Riwayat'];
 
 export default function StockDetail({ stock, onBack }) {
   const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('Teknikal');
-  const [history, setHistory] = useState([]);
   const [signalHistory, setSignalHistory] = useState([]);
 
   useEffect(() => {
     if (!stock?.symbol) return;
+    setDetail(null);
+    setSignalHistory([]);
     setLoading(true);
     fetchStockDetail(stock.symbol)
       .then((res) => setDetail(res.data || res))
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
+  }, [stock?.symbol]);
+
+  useEffect(() => {
+    if (activeTab !== 'Riwayat' || !stock?.symbol || signalHistory.length) return;
     fetchStockRecommendationHistory(stock.symbol)
       .then((res) => setSignalHistory(res.history || []))
       .catch(() => setSignalHistory([]));
-  }, [stock?.symbol]);
+  }, [activeTab, stock?.symbol, signalHistory.length]);
 
   const d = detail || stock || {};
   const price = d.price ?? 0;
@@ -61,15 +66,6 @@ export default function StockDetail({ stock, onBack }) {
   const techReasons = tech.reasons || [];
   const fundReasons = fund.reasons || [];
 
-  if (loading) {
-    return (
-      <div className="stock-detail">
-        <button className="detail-back" onClick={onBack}><span className="detail-back-arrow">←</span> Kembali</button>
-        <div className="skeleton-detail"><div className="skeleton-line w-40 h-xl" /><div className="skeleton-line w-full h-xl" /></div>
-      </div>
-    );
-  }
-
   return (
     <div className="stock-detail">
       <button className="detail-back" onClick={onBack}><span className="detail-back-arrow">←</span> Kembali</button>
@@ -81,7 +77,12 @@ export default function StockDetail({ stock, onBack }) {
         <div className="detail-hero-price">{fmtPrice(price)}</div>
         <div className="detail-hero-change" style={{ color: isPositive ? '#34C759' : '#FF3B30' }}>{isPositive ? '+' : ''}{changePct.toFixed(2)}%</div>
         <div className="detail-hero-signal"><SignalBadge signal={overallSignal} strength={overallStrength} large /></div>
+        {loading && <p className="detail-loading-note">Memuat analisis lengkap...</p>}
       </div>
+
+      {!d.trade_plan && loading && (
+        <div className="detail-section trade-plan-card"><h3 className="section-title">Analisis berjalan</h3><p className="trade-plan-text">Harga dan sinyal awal sudah tampil. Detail teknikal/fundamental sedang dimuat di belakang.</p></div>
+      )}
 
       {d.trade_plan && (
         <div className="detail-section trade-plan-card" style={{ animationDelay: '0.08s' }}>
@@ -99,7 +100,7 @@ export default function StockDetail({ stock, onBack }) {
 
       <div className="detail-section" style={{ animationDelay: '0.1s' }}>
         <h3 className="section-title">Grafik Harga</h3>
-        <Chart symbol={d.symbol} />
+        {detail ? <Chart symbol={d.symbol} /> : <div className="chart-placeholder">Grafik dimuat setelah analisis utama siap.</div>}
       </div>
 
       <div className="detail-tabs">
@@ -138,6 +139,9 @@ export default function StockDetail({ stock, onBack }) {
         <div className="detail-section overall-signal-section">
           <h3 className="section-title">Sinyal Keseluruhan</h3>
           <div className="overall-signal"><SignalBadge signal={overallSignal} strength={overallStrength} large /><p className="overall-strength-text">Kekuatan Sinyal: {overallStrength}/100</p></div>
+          {d.decision_summary && <p className="decision-summary">{d.decision_summary}</p>}
+          {d.key_drivers?.length > 0 && <><h4 className="mini-title">Kenapa hari ini?</h4><ul className="reason-list compact">{d.key_drivers.map((r, i) => <li key={`driver-${i}`} className="reason-item"><span className="reason-icon">✅</span><span>{r}</span></li>)}</ul></>}
+          {d.risk_notes?.length > 0 && <><h4 className="mini-title">Risiko</h4><ul className="reason-list compact">{d.risk_notes.map((r, i) => <li key={`risk-${i}`} className="reason-item"><span className="reason-icon">⚠️</span><span>{r}</span></li>)}</ul></>}
           <ul className="reason-list">{overallReasons.map((r, i) => <li key={i} className="reason-item"><span className="reason-icon">💡</span><span>{r}</span></li>)}</ul>
         </div>
       )}
@@ -150,7 +154,7 @@ export default function StockDetail({ stock, onBack }) {
               {signalHistory.map((row, i) => (
                 <li key={`${row.created_at}-${i}`} className="reason-item" style={{ alignItems: 'flex-start' }}>
                   <span className="reason-icon">{row.is_correct === 1 ? '✅' : row.is_correct === 0 ? '❌' : '⏳'}</span>
-                  <span><b style={{ color: '#fff' }}>{row.recommendation}</b> • strength {Math.round(row.strength || 0)} • {fmtPrice(row.price)}<br /><small style={{ color: '#8E8E93' }}>{row.return_pct == null ? 'Menunggu evaluasi 30 hari' : `Return ${row.return_pct}% • ${row.outcome || '-'}`}</small></span>
+                  <span><b style={{ color: '#fff' }}>{row.recommendation}</b> • strength {Math.round(row.strength || 0)} • {fmtPrice(row.price)}<br /><small style={{ color: '#8E8E93' }}>{row.return_pct == null ? 'Menunggu evaluasi 7 hari' : `Return ${row.return_pct}% • ${row.outcome || '-'}`}</small></span>
                 </li>
               ))}
             </ul>

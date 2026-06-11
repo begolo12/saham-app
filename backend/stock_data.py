@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 
 # Simple in-memory cache for yfinance data
 _history_cache: Dict[str, Dict] = {}
+_info_cache: Dict[str, Dict] = {}
 
 # Minimum price filter: include cheaper stocks only if still liquid/potential
 MIN_PRICE = 50
@@ -362,7 +363,7 @@ def get_top_stocks() -> List[Dict[str, Any]]:
 
 def get_stock_history(symbol: str, period: str = '6mo') -> pd.DataFrame:
     """Fetch OHLCV history for a given stock symbol (with .JK suffix).
-    Results cached in memory for 30 seconds per (symbol, period) pair.
+    Results cached in memory for 10 minutes per (symbol, period) pair.
     """
     if not symbol.endswith('.JK'):
         symbol = symbol + '.JK'
@@ -370,11 +371,12 @@ def get_stock_history(symbol: str, period: str = '6mo') -> pd.DataFrame:
     cache_key = f'hist:{symbol}:{period}'
     now = time.time()
     cached = _history_cache.get(cache_key)
-    if cached and (now - cached['timestamp']) < 30:
+    ttl = 600 if period in ('3mo', '6mo', '1y') else 180
+    if cached and (now - cached['timestamp']) < ttl:
         return cached['data']
 
     ticker = yf.Ticker(symbol)
-    df = ticker.history(period=period)
+    df = ticker.history(period=period, timeout=6)
 
     if df.empty:
         _history_cache[cache_key] = {'data': pd.DataFrame(), 'timestamp': now}
@@ -389,12 +391,30 @@ def get_stock_history(symbol: str, period: str = '6mo') -> pd.DataFrame:
 
 
 def get_stock_info(symbol: str) -> Dict[str, Any]:
-    """Fetch company info for a given stock symbol (with .JK suffix).
-    Results cached in memory for 60 seconds per symbol.
-    """
+    """Fetch company info for a given stock symbol (with .JK suffix), cached for speed."""
     if not symbol.endswith('.JK'):
         symbol = symbol + '.JK'
 
+    now = time.time()
+    cached = _info_cache.get(symbol)
+    if cached and (now - cached['timestamp']) < 900:
+        return cached['data']
+
     ticker = yf.Ticker(symbol)
-    info = ticker.info
+    try:
+        info = ticker.info or {}
+    except Exception:
+        info = {}
+    if not info:
+        try:
+            fast = ticker.fast_info or {}
+            info = {
+                'lastPrice': _safe_float(fast.get('last_price')),
+                'marketCap': _safe_float(fast.get('market_cap')),
+                'fiftyTwoWeekHigh': _safe_float(fast.get('year_high')),
+                'fiftyTwoWeekLow': _safe_float(fast.get('year_low')),
+            }
+        except Exception:
+            info = {}
+    _info_cache[symbol] = {'data': info, 'timestamp': now}
     return info

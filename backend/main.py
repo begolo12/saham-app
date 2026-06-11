@@ -52,7 +52,7 @@ DEFAULT_ADMIN_USERNAME = os.environ.get('SAHAM_ADMIN_USERNAME', 'admin')
 DEFAULT_ADMIN_PASSWORD = os.environ.get('SAHAM_ADMIN_PASSWORD', 'admin123')
 AUTH_SECRET = os.environ.get('SAHAM_AUTH_SECRET') or os.environ.get('SAHAM_ADMIN_PASSWORD') or 'dev-only-secret'
 AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30
-LEARNING_WINDOW_DAYS = 30
+LEARNING_WINDOW_DAYS = 7
 TRADE_HORIZON_DAYS = 7
 STOP_LOSS_PCT = -5.0
 TAKE_PROFIT_PCT = 8.0
@@ -286,7 +286,14 @@ def _evaluate_learning_batch(limit: int = 50):
             df = get_stock_history(symbol, period='6mo')
             if df.empty or len(df) < 2:
                 continue
-            future_price = float(df['close'].iloc[-1])
+            created_at = datetime.fromisoformat(str(row['created_at']).replace('Z', '+00:00'))
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            target_date = (created_at + timedelta(days=LEARNING_WINDOW_DAYS)).date()
+            target_rows = df[df.index.date >= target_date]
+            if target_rows.empty:
+                continue
+            future_price = float(target_rows['close'].iloc[0])
             entry_price = float(row['price'] or 0)
             if entry_price <= 0:
                 continue
@@ -934,8 +941,12 @@ async def stock_detail(symbol: str):
     sym = _ensure_symbol(symbol)
 
     try:
-        info = get_stock_info(sym)
-        df = get_stock_history(sym, period='6mo')
+        info, df = await asyncio.gather(
+            _fetch_stock_data_with_retry(get_stock_info, sym, timeout=6),
+            _fetch_stock_data_with_retry(get_stock_history, sym, '6mo', timeout=7),
+        )
+        info = info or {}
+        df = df if df is not None else pd.DataFrame()
     except Exception as e:
         logger.error('stock_detail failed for %s: %s', symbol, e)
         raise HTTPException(status_code=404, detail=f'Saham {symbol} tidak ditemukan')
@@ -983,6 +994,46 @@ async def stock_detail(symbol: str):
     volatility_pct = round(float(close.pct_change().tail(20).std() * 100), 2) if len(close) >= 20 else None
     trade_plan = _make_trade_plan(symbol.upper().replace('.JK', ''), latest_close, overall['signal'], overall['strength'], volatility_pct)
     daily_check = _daily_check_from_plan(latest_close, trade_plan)
+
+    def _decision_copy(signal: str) -> Dict[str, Any]:
+        label = 'HOLD' if signal == 'NEUTRAL' else signal
+        if signal == 'BUY':
+            headline = f"Layak BUY hari ini karena momentum teknikal dan risk/reward 7 hari masih menarik. Kekuatan {overall['strength']}/100."
+        elif signal == 'SELL':
+            headline = f"Layak SELL / hindari entry hari ini karena tekanan harga atau risiko turun masih dominan. Kekuatan {overall['strength']}/100."
+        else:
+            headline = f"Layak HOLD / tunggu dulu. Belum ada edge cukup kuat untuk BUY atau SELL. Kekuatan {overall['strength']}/100."
+        drivers = []
+
+        def _safe_metric(val):
+            return None if (val is None or (isinstance(val, float) and pd.isna(val))) else round(float(val), 2)
+        rsi_now = _safe_metric(rsi_series.iloc[-1])
+        sma20_now = _safe_metric(sma20.iloc[-1])
+        sma50_now = _safe_metric(sma50.iloc[-1])
+        if rsi_now is not None:
+            drivers.append(f'RSI 14 di {rsi_now}: ' + ('oversold, peluang rebound tapi tetap tunggu konfirmasi' if rsi_now < 30 else 'overbought, rawan koreksi' if rsi_now > 70 else 'zona normal'))
+        if sma20_now and latest_close >= sma20_now:
+            drivers.append('Harga di atas SMA 20: momentum pendek masih positif')
+        elif sma20_now:
+            drivers.append('Harga di bawah SMA 20: momentum pendek masih lemah')
+        if sma50_now and latest_close >= sma50_now:
+            drivers.append('Harga di atas SMA 50: tren menengah mendukung')
+        elif sma50_now:
+            drivers.append('Harga di bawah SMA 50: tren menengah belum kuat')
+        if recent_volume < VOLUME_THRESHOLD:
+            drivers.append('Volume di bawah 500.000: sinyal diturunkan karena likuiditas rendah')
+        else:
+            drivers.append('Volume memenuhi batas likuiditas minimum')
+        risks = []
+        if volatility_pct and volatility_pct >= 6:
+            risks.append(f'Volatilitas tinggi {volatility_pct}%: gunakan posisi kecil dan disiplin stop loss')
+        if fund_signal.get('signal') == 'SELL':
+            risks.append('Fundamental memberi tekanan, jangan agresif walau teknikal membaik')
+        if not risks:
+            risks.append('Risiko utama: perubahan harga mendadak dan data pasar tertunda dari sumber eksternal')
+        return {'label': label, 'headline': headline, 'key_drivers': drivers[:5], 'risk_notes': risks[:4]}
+
+    decision = _decision_copy(overall['signal'])
 
     name = info.get('longName', info.get('shortName', symbol.replace('.JK', '')))
     _record_recommendation({
@@ -1036,8 +1087,12 @@ async def stock_detail(symbol: str):
             'reasons': fund_signal['reasons'],
         },
         'overall_signal': overall['signal'],
+        'overall_label': decision['label'],
         'overall_strength': overall['strength'],
         'overall_reasons': overall['reasons'],
+        'decision_summary': decision['headline'],
+        'key_drivers': decision['key_drivers'],
+        'risk_notes': decision['risk_notes'],
         'trade_plan': trade_plan,
         'daily_check': daily_check,
         'volatility_pct': volatility_pct,
@@ -1146,7 +1201,7 @@ async def stock_signals(symbol: str):
 
 @app.get('/api/learning/evaluate')
 async def learning_evaluate(limit: int = 50):
-    """Evaluate recommendations older than 30 days against latest available price."""
+    """Evaluate recommendations older than 7 days against latest available price."""
     results = _evaluate_learning_batch(limit=limit)
     with _db_conn() as conn:
         summary = conn.execute(
@@ -1222,7 +1277,7 @@ async def learning_summary():
         'accuracy': round((correct_total / evaluated_total) * 100, 2) if evaluated_total else 0,
         'by_signal': by_signal,
         'recent': [dict(r) for r in recent],
-        'rule': 'BUY benar jika return 30 hari > 0%; SELL benar jika return < 0%; HOLD benar jika return di antara -5% sampai +5%.',
+        'rule': 'BUY benar jika return 7 hari > 0%; SELL benar jika return < 0%; HOLD benar jika return di antara -5% sampai +5%.',
         'updated_at': _now_iso(),
     }
 
@@ -1366,7 +1421,7 @@ async def daily_report(user: Dict[str, Any] = Depends(current_user)):
         'buy_now': buys,
         'sell_or_avoid': sells,
         'portfolio': portfolio['summary'],
-        'rule': 'BUY punya target 7 hari + stop loss. Cek tiap hari. Sinyal dievaluasi 30 hari untuk learning.',
+        'rule': 'BUY punya target 7 hari + stop loss. Cek tiap hari. Sinyal dievaluasi 7 hari untuk learning.',
         'updated_at': _now_iso(),
     }
 

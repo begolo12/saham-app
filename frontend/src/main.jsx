@@ -4,6 +4,7 @@ import './index.css';
 import './theme-clay.css';
 import './layout-fix.css';
 import './performance.css';
+import './ios-polish.css';
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
