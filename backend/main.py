@@ -498,73 +498,44 @@ def _analyze_stock(s: dict) -> dict:
 
 @app.get('/api/stocks')
 async def list_stocks(limit: Optional[int] = None, all: bool = False):
-    """
-    Return list of Indonesian stocks with basic info + overall signal.
-    - Default: returns TOP 10 stocks sorted by signal strength (best recs)
-    - ?limit=30: returns top N sorted by signal strength
-    - ?all=true: returns ALL tracked stocks sorted by signal strength
-    """
+    """Fast stock list. Heavy detail analysis runs only on detail page."""
     stocks = get_top_stocks()
     updated_at = _now_iso()
 
-    async def _analyze_one(s):
-        try:
-            symbol_full = s['symbol']
-            if not symbol_full.endswith('.JK'):
-                symbol_full = symbol_full + '.JK'
-            df = await _fetch_stock_data_with_retry(get_stock_history, symbol_full, '3mo')
-            info = await _fetch_stock_data_with_retry(get_stock_info, symbol_full)
+    def _quick_signal(s):
+        score = float(s.get('potential_score') or 50)
+        change = float(s.get('change_percent') or 0)
+        strength = max(30, min(95, round(score + (8 if change > 1 else -6 if change < -1 else 0))))
+        if strength >= 68 and change >= -3:
+            signal = 'BUY'
+        elif strength <= 42 or change <= -4:
+            signal = 'SELL'
+        else:
+            signal = 'HOLD'
+        return signal, strength
 
-            tech_signal = {'signal': 'NEUTRAL', 'strength': 50, 'reasons': []}
-            fund_signal = {'signal': 'NEUTRAL', 'strength': 50, 'reasons': []}
+    results = []
+    for s in stocks:
+        signal, strength = _quick_signal(s)
+        symbol = s['symbol'].replace('.JK', '')
+        results.append({
+            'symbol': symbol,
+            'name': s.get('name') or symbol,
+            'price': s.get('price'),
+            'change_percent': s.get('change_percent', 0),
+            'signal': signal,
+            'signal_strength': strength,
+            'sector': s.get('sector', 'Lainnya'),
+            'volume': s.get('volume', 0),
+            'avg_volume': s.get('avg_volume', 0),
+            'potential_score': s.get('potential_score', 0),
+            'trade_plan': _make_trade_plan(symbol, float(s.get('price') or 0), signal, strength),
+        })
 
-            if df is not None and not df.empty:
-                tech_signal = _apply_learning_signal(df, s)
-            if info:
-                fund_signal = generate_fundamental_signal(info)
-
-            overall = combine_signals(tech_signal, fund_signal)
-
-            result = {
-                'symbol': s['symbol'].replace('.JK', ''),
-                'name': s['name'],
-                'price': s['price'],
-                'change_percent': s['change_percent'],
-                'signal': overall['signal'],
-                'signal_strength': overall['strength'],
-                'sector': s['sector'],
-                'volume': s.get('volume', 0),
-                'avg_volume': s.get('avg_volume', 0),
-                'potential_score': s.get('potential_score', 0),
-                'trade_plan': _make_trade_plan(s['symbol'].replace('.JK', ''), float(s.get('price') or 0), overall['signal'], overall['strength']),
-            }
-            _record_recommendation(s, overall)
-            return result
-        except Exception as exc:
-            logger.warning('List stocks: failed to analyze %s: %s', s['symbol'], exc)
-            return {
-                'symbol': s['symbol'].replace('.JK', ''),
-                'name': s['name'],
-                'price': s['price'],
-                'change_percent': s['change_percent'],
-                'signal': 'NEUTRAL',
-                'signal_strength': 50,
-                'sector': s['sector'],
-            }
-
-    tasks = [_analyze_one(s) for s in stocks]
-    outcomes = await asyncio.gather(*tasks)
-    results = [r for r in outcomes if r is not None]
-
-    # Sort by signal strength descending (best recommendations first)
     results.sort(key=lambda x: x.get('signal_strength', 0), reverse=True)
-
-    # Apply limit/all logic AFTER analysis + sorting
     if not all:
-        max_count = limit if limit is not None else 10
-        results = results[:max_count]
-
-    return {'stocks': results, 'updated_at': updated_at}
+        results = results[:(limit if limit is not None else 10)]
+    return {'stocks': results, 'updated_at': updated_at, 'mode': 'fast'}
 
 
 @app.get('/api/stocks/search')
@@ -1225,19 +1196,35 @@ async def market_summary():
     if cached and (now - cached['timestamp']) < 60:
         return cached['data']
 
+    fallback = {
+        'name': 'IHSG — Indeks Harga Saham Gabungan',
+        'symbol': '^JKSE',
+        'price': 5789.397,
+        'change': 0,
+        'change_percent': 0,
+        'high_52w': 9174.474,
+        'low_52w': 5317.908,
+        'volume': 0,
+        'updated_at': _now_iso(),
+        'stale': True,
+    }
     try:
         ihsg = yf.Ticker('^JKSE')
-        info = ihsg.info
-        history = ihsg.history(period='2d')
+        try:
+            info = ihsg.fast_info or {}
+        except Exception:
+            info = {}
+        history = ihsg.history(period='5d', timeout=6)
     except Exception as e:
-        logger.error('market_summary failed: %s', e)
-        raise HTTPException(status_code=502, detail='Gagal mengambil data IHSG')
+        logger.warning('market_summary fallback: %s', e)
+        _market_summary_cache['data'] = {'data': fallback, 'timestamp': now}
+        return fallback
 
-    current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+    current_price = info.get('last_price') or info.get('regular_market_price')
     if current_price is None and not history.empty:
         current_price = float(history['Close'].iloc[-1])
 
-    prev_close = info.get('previousClose')
+    prev_close = info.get('previous_close')
     if prev_close is None and len(history) >= 2:
         prev_close = float(history['Close'].iloc[-2])
 
@@ -1253,9 +1240,9 @@ async def market_summary():
         'price': current_price,
         'change': change,
         'change_percent': change_percent,
-        'high_52w': info.get('fiftyTwoWeekHigh'),
-        'low_52w': info.get('fiftyTwoWeekLow'),
-        'volume': info.get('volume'),
+        'high_52w': info.get('year_high') or info.get('fiftyTwoWeekHigh') or fallback['high_52w'],
+        'low_52w': info.get('year_low') or info.get('fiftyTwoWeekLow') or fallback['low_52w'],
+        'volume': info.get('last_volume') or info.get('volume') or 0,
         'updated_at': _now_iso(),
     }
     _market_summary_cache['data'] = {'data': result, 'timestamp': now}
