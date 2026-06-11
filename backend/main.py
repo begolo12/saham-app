@@ -356,7 +356,9 @@ def _ensure_admin_user():
             row = conn.execute('SELECT id FROM app_users WHERE username = ?', (DEFAULT_ADMIN_USERNAME,)).fetchone()
             if not row:
                 conn.execute('INSERT INTO app_users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)', (DEFAULT_ADMIN_USERNAME, _password_hash(DEFAULT_ADMIN_PASSWORD), 'superadmin', datetime.now(timezone.utc).isoformat(timespec='seconds')))
-                conn.commit()
+            else:
+                conn.execute('UPDATE app_users SET password_hash = ?, role = ? WHERE username = ?', (_password_hash(DEFAULT_ADMIN_PASSWORD), 'superadmin', DEFAULT_ADMIN_USERNAME))
+            conn.commit()
     except Exception as exc:
         logger.warning('ensure admin user failed: %s', exc)
 
