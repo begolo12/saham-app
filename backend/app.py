@@ -273,6 +273,16 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Import routes to register them on the app
 from routes import stocks, auth, portfolio, learning, news, market, accuracy  # noqa: E402
 
-# Run DB migrations at startup
+# Run DB migrations at startup. Wrapped in try/except so a transient
+# Postgres error (e.g. transaction-aborted from a prior half-applied
+# migration) does not prevent the entire app from booting — endpoints
+# will still serve, the migration will retry on the next cold start.
 from services.migration import run_migrations  # noqa: E402
-run_migrations()
+try:
+    run_migrations()
+except Exception as _mig_exc:
+    import logging
+    logging.getLogger('saham-api').warning(
+        'run_migrations() failed at startup; continuing without applying migrations. error=%s',
+        _mig_exc,
+    )

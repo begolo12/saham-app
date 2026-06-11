@@ -54,12 +54,17 @@ def run_migrations():
                     updated_at TEXT NOT NULL
                 )
             ''')
+            # IF NOT EXISTS guards: previous deploys / _init_db may have already
+            # created these columns. Without the guard, the second ALTER raises
+            # an error that aborts the Postgres transaction, and every later
+            # execute() in the same `with` block (including CREATE INDEX) fails
+            # with InFailedSqlTransaction even though we caught the exception.
             try:
-                conn.execute('ALTER TABLE app_users ADD COLUMN refresh_token TEXT')
+                conn.execute('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS refresh_token TEXT')
             except Exception:
                 pass
             try:
-                conn.execute('ALTER TABLE app_users ADD COLUMN refresh_token_expiry INTEGER')
+                conn.execute('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS refresh_token_expiry INTEGER')
             except Exception:
                 pass
             # S17: add canonical weight columns (see SQLite branch below for rationale)
@@ -83,15 +88,18 @@ def run_migrations():
             except Exception:
                 pass
             try:
-                conn.execute('ALTER TABLE signal_recommendations ADD COLUMN outlier_reason TEXT')
+                conn.execute('ALTER TABLE signal_recommendations ADD COLUMN IF NOT EXISTS outlier_reason TEXT')
             except Exception:
                 pass
             try:
-                conn.execute('ALTER TABLE signal_recommendations ADD COLUMN signal_version TEXT')
+                conn.execute('ALTER TABLE signal_recommendations ADD COLUMN IF NOT EXISTS signal_version TEXT')
             except Exception:
                 pass
             # Index for O(1) refresh-token lookups (added S15)
-            conn.execute('CREATE INDEX IF NOT EXISTS idx_app_users_refresh_token ON app_users(refresh_token)')
+            try:
+                conn.execute('CREATE INDEX IF NOT EXISTS idx_app_users_refresh_token ON app_users(refresh_token)')
+            except Exception:
+                pass
         else:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS signal_backtest (
@@ -181,7 +189,10 @@ def run_migrations():
             except Exception:
                 pass
             # Index for O(1) refresh-token lookups (added S15)
-            conn.execute('CREATE INDEX IF NOT EXISTS idx_app_users_refresh_token ON app_users(refresh_token)')
+            try:
+                conn.execute('CREATE INDEX IF NOT EXISTS idx_app_users_refresh_token ON app_users(refresh_token)')
+            except Exception:
+                pass
             # Macro columns on existing table
             try:
                 conn.execute('ALTER TABLE market_regime ADD COLUMN bi_rate REAL')
