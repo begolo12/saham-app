@@ -442,6 +442,42 @@ def _stock_bias(stock: Dict[str, Any]) -> Dict[str, float]:
     return {'volume_bias': volume_bias, 'price_bias': price_bias}
 
 
+def _fast_list_signal(s: Dict[str, Any]) -> tuple[str, int]:
+    """Balanced list signal from lightweight technicals, not liquidity score alone."""
+    change = float(s.get('change_percent') or 0)
+    trend_5d = float(s.get('trend_5d') or 0)
+    trend_20d = float(s.get('trend_20d') or 0)
+    rsi = float(s.get('rsi14') or 50)
+    volume_ratio = float(s.get('volume_ratio') or 1)
+    volume = float(s.get('volume') or 0)
+    avg_volume = float(s.get('avg_volume') or 0)
+
+    strength = 50.0
+    strength += max(-12, min(12, trend_5d * 1.6))
+    strength += max(-10, min(10, trend_20d * 0.7))
+    strength += 6 if change > 1 else -6 if change < -1 else 0
+    strength += 5 if volume_ratio >= 1.3 else -4 if volume_ratio < 0.7 else 0
+
+    if rsi < 30:
+        strength += 10
+    elif rsi > 75:
+        strength -= 14
+    elif rsi > 68:
+        strength -= 7
+
+    if volume < VOLUME_THRESHOLD and avg_volume < VOLUME_THRESHOLD:
+        strength -= 10
+    strength = max(1, min(100, round(strength)))
+
+    if strength >= 60 and trend_5d > 2 and trend_20d > -8 and rsi < 70:
+        signal = 'BUY'
+    elif strength <= 38 or (trend_5d <= -5 and rsi > 35) or change <= -4 or rsi >= 78:
+        signal = 'SELL'
+    else:
+        signal = 'NEUTRAL'
+    return signal, strength
+
+
 def _apply_learning_signal(df: pd.DataFrame, stock: Dict[str, Any]) -> Dict[str, Any]:
     bias = _stock_bias(stock)
     learning_bias = _learning_bias_for_symbol(stock.get('symbol', ''))
@@ -626,16 +662,7 @@ async def list_stocks(limit: Optional[int] = None, all: bool = False):
     updated_at = _now_iso()
 
     def _quick_signal(s):
-        score = float(s.get('potential_score') or 50)
-        change = float(s.get('change_percent') or 0)
-        strength = max(30, min(95, round(score + (10 if change > 1 else -6 if change < -1 else 0))))
-        if strength >= 55 and change >= -3:
-            signal = 'BUY'
-        elif strength <= 42 or change <= -4:
-            signal = 'SELL'
-        else:
-            signal = 'NEUTRAL'
-        return signal, strength
+        return _fast_list_signal(s)
 
     results = []
     for s in stocks:
@@ -652,12 +679,16 @@ async def list_stocks(limit: Optional[int] = None, all: bool = False):
             'volume': s.get('volume', 0),
             'avg_volume': s.get('avg_volume', 0),
             'potential_score': s.get('potential_score', 0),
+            'trend_5d': s.get('trend_5d', 0),
+            'trend_20d': s.get('trend_20d', 0),
+            'rsi14': s.get('rsi14', 50),
+            'volume_ratio': s.get('volume_ratio', 1),
             'trade_plan': _make_trade_plan(symbol, float(s.get('price') or 0), signal, strength),
         })
 
     results.sort(key=lambda x: x.get('signal_strength', 0), reverse=True)
     if not all:
-        results = results[:(limit if limit is not None else 10)]
+        results = results[:(limit if limit is not None else 50)]
     return {'stocks': results, 'updated_at': updated_at, 'mode': 'fast'}
 
 
@@ -706,15 +737,7 @@ async def search_stocks(q: str):
             }
 
     def _quick_result(s):
-        score = float(s.get('potential_score') or 0)
-        change = float(s.get('change_percent') or 0)
-        strength = max(30, min(95, round(score + (10 if change > 1 else -6 if change < -1 else 0))))
-        if strength >= 55 and change >= -3:
-            signal = 'BUY'
-        elif strength <= 42 or change <= -4:
-            signal = 'SELL'
-        else:
-            signal = 'NEUTRAL'
+        signal, strength = _fast_list_signal(s)
         symbol = s['symbol'].replace('.JK', '')
         return {
             'symbol': symbol,
@@ -727,6 +750,10 @@ async def search_stocks(q: str):
             'volume': s.get('volume', 0),
             'avg_volume': s.get('avg_volume', 0),
             'potential_score': s.get('potential_score', 0),
+            'trend_5d': s.get('trend_5d', 0),
+            'trend_20d': s.get('trend_20d', 0),
+            'rsi14': s.get('rsi14', 50),
+            'volume_ratio': s.get('volume_ratio', 1),
             'trade_plan': _make_trade_plan(symbol, float(s.get('price') or 0), signal, strength),
         }
 

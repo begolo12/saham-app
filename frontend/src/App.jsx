@@ -284,7 +284,7 @@ export default function App() {
   }, []);
 
   const watchlistStocks = allStocks.filter(s => watchlist.includes(s.symbol));
-  const summaryStocks = allStocks.length ? allStocks : topStocks;
+  const summaryStocks = allStocks;
   const signalStats = {
     beli: countSignal(summaryStocks, 'BUY'),
     jual: countSignal(summaryStocks, 'SELL'),

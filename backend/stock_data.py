@@ -13,7 +13,7 @@ MIN_VOLUME = 500_000
 MIN_AVG_VALUE = 1_000_000_000  # avg traded value per day (IDR)
 MIN_DAYS = 20
 MAX_FAILED_RATIO = 0.4
-MAX_UNIVERSE = 80
+MAX_UNIVERSE = 140
 
 TOP_STOCK_FALLBACK = [
     {'symbol':'BBCA','name':'Bank Central Asia Tbk.','price':10250,'change_percent':0,'sector':'Perbankan','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':88},
@@ -28,8 +28,9 @@ TOP_STOCK_FALLBACK = [
     {'symbol':'PGAS','name':'Perusahaan Gas Negara Tbk.','price':1500,'change_percent':0,'sector':'Energi','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':66},
 ]
 _top_stocks_cache = {'timestamp': 0, 'data': []}
-# score threshold to keep cheap but liquid names like BUMI
-MIN_POTENTIAL_SCORE = 40
+# score threshold: do not drop low-score liquid stocks from universe.
+# Signal engine decides BUY/NEUTRAL/SELL later; scanner only filters liquidity/data quality.
+MIN_POTENTIAL_SCORE = 0
 
 # 80+ Indonesian stocks covering all sectors
 INDONESIAN_STOCKS = [
@@ -249,6 +250,38 @@ def _score_stock(price: float, change_percent: float, volume: float, avg_volume:
     return score
 
 
+def _calc_card_indicators(history: pd.DataFrame) -> Dict[str, float]:
+    """Lightweight technical indicators from cached 1-month OHLCV for list signals."""
+    close = history['Close'].dropna()
+    volume = history['Volume'].dropna()
+    if close.empty:
+        return {'trend_5d': 0.0, 'trend_20d': 0.0, 'rsi14': 50.0, 'volume_ratio': 1.0}
+    last = float(close.iloc[-1])
+    prev_5 = float(close.iloc[-6]) if len(close) >= 6 else float(close.iloc[0])
+    prev_20 = float(close.iloc[-21]) if len(close) >= 21 else float(close.iloc[0])
+    trend_5d = ((last - prev_5) / prev_5) * 100 if prev_5 else 0.0
+    trend_20d = ((last - prev_20) / prev_20) * 100 if prev_20 else 0.0
+
+    delta = close.diff()
+    gain = delta.clip(lower=0).tail(14).mean()
+    loss = (-delta.clip(upper=0)).tail(14).mean()
+    if loss and loss > 0:
+        rs = gain / loss
+        rsi14 = 100 - (100 / (1 + rs))
+    else:
+        rsi14 = 70.0 if gain and gain > 0 else 50.0
+
+    avg_vol = float(volume.tail(20).mean()) if not volume.empty else 0.0
+    last_vol = float(volume.iloc[-1]) if not volume.empty else 0.0
+    volume_ratio = last_vol / avg_vol if avg_vol else 1.0
+    return {
+        'trend_5d': round(trend_5d, 2),
+        'trend_20d': round(trend_20d, 2),
+        'rsi14': round(float(rsi14), 2),
+        'volume_ratio': round(float(volume_ratio), 2),
+    }
+
+
 def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
     try:
         ticker = yf.Ticker(symbol)
@@ -272,9 +305,8 @@ def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
         prev_close = _safe_float(history['Close'].iloc[-2]) if len(history) >= 2 else current_price
         change_percent = ((current_price - prev_close) / prev_close) * 100 if prev_close else 0.0
         market_cap = _safe_float(info.get('market_cap')) or 0.0
+        indicators = _calc_card_indicators(history)
         potential_score = _score_stock(current_price, change_percent, volume, avg_volume, market_cap, 0, 0)
-        if potential_score < MIN_POTENTIAL_SCORE:
-            return None
         return {
             'symbol': symbol.replace('.JK', ''),
             'name': symbol.replace('.JK', ''),
@@ -285,6 +317,7 @@ def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
             'avg_volume': int(avg_volume),
             'avg_value': int(avg_value),
             'potential_score': round(potential_score, 2),
+            **indicators,
         }
     except Exception:
         return None
