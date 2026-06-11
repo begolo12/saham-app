@@ -11,10 +11,10 @@ _info_cache: Dict[str, Dict] = {}
 # Minimum price filter: include cheaper stocks only if still liquid/potential
 MIN_PRICE = 50
 MIN_VOLUME = 10_000
-MIN_AVG_VALUE = 100_000_000  # 100M IDR/day minimum avg traded value (lowered to admit 10K-volume stocks)
+MIN_AVG_VALUE = 10_000_000  # 10M IDR/day minimum avg traded value — keeps penny stocks (price>=50) at 10K+ volume
 MIN_DAYS = 20
 MAX_FAILED_RATIO = 0.5
-MAX_UNIVERSE = 220
+MAX_UNIVERSE = 280  # tuned for Vercel 30s scan budget with 40 workers
 
 TOP_STOCK_FALLBACK = [
     {'symbol':'BBCA','name':'Bank Central Asia Tbk.','price':10250,'change_percent':0,'sector':'Perbankan','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':88},
@@ -372,10 +372,12 @@ def get_top_stocks() -> List[Dict[str, Any]]:
         return cached
 
     results = []
-    executor = ThreadPoolExecutor(max_workers=20)
+    # 40 workers balances yfinance rate-limit headroom against finishing the
+    # 280-symbol universe inside the 30s Vercel cold-start budget.
+    executor = ThreadPoolExecutor(max_workers=40)
     futures = [executor.submit(_fetch_stock_card, symbol) for symbol in INDONESIAN_STOCKS[:MAX_UNIVERSE]]
     try:
-        deadline = now + 30  # 30s timeout so 300+ stocks can fetch on cold cache
+        deadline = now + 30  # 30s timeout so 280+ stocks can fetch on cold cache
         for fut in as_completed(futures, timeout=32):
             if time.time() > deadline:
                 break

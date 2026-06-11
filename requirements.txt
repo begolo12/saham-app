@@ -7,3 +7,7 @@ numpy>=1.26
 pydantic>=2
 psycopg[binary]>=3.2
 python-multipart>=0.0.9
+# Optional cache: fakeredis provides in-process Redis-compatible cache for the
+# BackgroundWorker on serverless hosts (Vercel) where a real Redis isn't set.
+# Falls back gracefully to no-cache if even fakeredis fails to import.
+fakeredis>=2.20

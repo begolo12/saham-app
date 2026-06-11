@@ -1,0 +1,6 @@
+Requirement already satisfied: fakeredis in C:\Users\irvan\AppData\Local\Programs\Python\Python314\Lib\site-packages (2.36.1)
+Requirement already satisfied: redis>=4.3 in C:\Users\irvan\AppData\Local\Programs\Python\Python314\Lib\site-packages (from fakeredis) (8.0.0)
+Requirement already satisfied: sortedcontainers>=2 in C:\Users\irvan\AppData\Local\Programs\Python\Python314\Lib\site-packages (from fakeredis) (2.4.0)
+
+[notice] A new release of pip is available: 26.1.1 -> 26.1.2
+[notice] To update, run: C:\Users\irvan\AppData\Local\Programs\Python\Python314\python.exe -m pip install --upgrade pip
