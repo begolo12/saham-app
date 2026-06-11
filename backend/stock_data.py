@@ -10,11 +10,11 @@ _info_cache: Dict[str, Dict] = {}
 
 # Minimum price filter: include cheaper stocks only if still liquid/potential
 MIN_PRICE = 50
-MIN_VOLUME = 500_000
-MIN_AVG_VALUE = 1_000_000_000  # avg traded value per day (IDR)
+MIN_VOLUME = 10_000
+MIN_AVG_VALUE = 100_000_000  # 100M IDR/day minimum avg traded value (lowered to admit 10K-volume stocks)
 MIN_DAYS = 20
-MAX_FAILED_RATIO = 0.4
-MAX_UNIVERSE = 140
+MAX_FAILED_RATIO = 0.5
+MAX_UNIVERSE = 220
 
 TOP_STOCK_FALLBACK = [
     {'symbol':'BBCA','name':'Bank Central Asia Tbk.','price':10250,'change_percent':0,'sector':'Perbankan','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':88},
@@ -77,6 +77,42 @@ INDONESIAN_STOCKS = [
     'SRTG.JK', 'SRAJ.JK', 'MIDI.JK', 'AMRT.JK', 'MAPA.JK', 'FILM.JK', 'MSIN.JK',
     'BANK.JK', 'BTPS.JK', 'MAYA.JK', 'BNGA.JK', 'PNBN.JK', 'BJBR.JK', 'BJTM.JK',
     'SMIL.JK', 'VKTR.JK', 'GGRM.JK', 'CMRY.JK', 'CLEO.JK', 'ULTJ.JK', 'ROTI.JK',
+    # NOTE: delisted/renamed tickers removed from extended universe:
+    # FREN, TMPI, BULL, VIVA, BMTR, LMAX, NAGA (no data)
+    # Additional active IDX universe (10K+ vol) — curated well-known tickers
+    'WIIM.JK', 'ITIC.JK', 'PYFA.JK', 'INAF.JK', 'BSSR.JK', 'PKPK.JK', 'ARII.JK',
+    'CITA.JK', 'COWL.JK', 'DILD.JK', 'JRPT.JK', 'MKPI.JK', 'PLIN.JK', 'GMTD.JK',
+    'BAPA.JK', 'PUDP.JK', 'SKBM.JK', 'ADES.JK', 'BUDI.JK', 'HOKI.JK', 'KEJU.JK',
+    'GZCO.JK', 'BNLI.JK', 'BVIC.JK', 'INPC.JK', 'MCOR.JK', 'NAGA.JK', 'PNBS.JK',
+    'BSIM.JK', 'BGTG.JK', 'BMAS.JK', 'LIFE.JK', 'AMAG.JK', 'ASDM.JK', 'ASMI.JK',
+    'ASJT.JK', 'ABDA.JK', 'AHAP.JK', 'PNIN.JK', 'SMAR.JK', 'TMPI.JK', 'TRIM.JK',
+    'PANS.JK', 'KREN.JK', 'PEGE.JK', 'YULE.JK', 'AMOR.JK', 'VICI.JK', 'ACST.JK',
+    'TOTL.JK', 'NRCA.JK', 'DGIK.JK', 'JKON.JK', 'TAMA.JK', 'PBSA.JK', 'MTRA.JK',
+    'IPCM.JK', 'INDS.JK', 'SMSM.JK', 'IMAS.JK', 'BOLT.JK', 'GDYR.JK', 'SRSN.JK',
+    'EKAD.JK', 'INCI.JK', 'MDKI.JK', 'ALDO.JK', 'YPBK.JK', 'CLPI.JK', 'OKAS.JK',
+    'ASSA.JK', 'LRNA.JK', 'HITS.JK', 'CMPP.JK', 'GIAA.JK', 'IATA.JK', 'JSKY.JK',
+    'KARW.JK', 'WEHA.JK', 'RANC.JK', 'CSAP.JK', 'DAYA.JK', 'HERO.JK', 'MTFN.JK',
+    'TRIO.JK', 'KOPI.JK', 'FAST.JK', 'NFCX.JK', 'MCAS.JK', 'DIVA.JK', 'SGRO.JK',
+    'TBLA.JK', 'PALM.JK', 'DSNG.JK', 'JAWA.JK', 'MGRO.JK', 'BWPT.JK', 'ANJT.JK',
+    'GZBK.JK', 'NIPS.JK', 'CSIS.JK', 'TRIS.JK', 'BLJA.JK', 'VIVA.JK', 'BMTR.JK',
+    'POLY.JK', 'KPIF.JK', 'LMAX.JK', 'TFAS.JK', 'KIOS.JK', 'AGRS.JK', 'ELIT.JK',
+    'MCOL.JK', 'JAST.JK', 'ENVY.JK', 'ZONE.JK', 'CASH.JK', 'PTSN.JK', 'DMMX.JK',
+    'IRSX.JK', 'VISI.JK', 'HDIT.JK', 'LUCK.JK', 'DEAL.JK', 'APLN.JK', 'ARCI.JK',
+    'AGII.JK', 'FASW.JK', 'HKMU.JK', 'INDX.JK', 'JPRS.JK', 'JTPE.JK', 'KAYU.JK',
+    'KDTN.JK', 'LPCK.JK', 'MARK.JK', 'MDLN.JK', 'MERI.JK', 'META.JK', 'MICE.JK',
+    'MINA.JK', 'MPRO.JK', 'MTMH.JK', 'MYTX.JK', 'NUSA.JK', 'OASA.JK', 'OMRE.JK',
+    'PADA.JK', 'PAM.JK', 'PGJO.JK', 'PGLI.JK', 'PJAA.JK', 'PNGO.JK', 'POWR.JK',
+    'PPGL.JK', 'PRAS.JK', 'PRDA.JK', 'PRIM.JK', 'PTIS.JK', 'RAAM.JK', 'RBMS.JK',
+    'REAL.JK', 'RIMO.JK', 'ROCK.JK', 'RODA.JK', 'RUIS.JK', 'SAME.JK', 'SAPX.JK',
+    'SDMU.JK', 'SFAN.JK', 'SGER.JK', 'SHEET.JK', 'SHID.JK', 'SIMA.JK', 'SKRN.JK',
+    'SLIS.JK', 'SMBR.JK', 'SMCB.JK', 'SMDM.JK', 'SMGA.JK', 'SMKL.JK', 'SMMT.JK',
+    'SMRU.JK', 'SOCI.JK', 'SOFA.JK', 'SOLA.JK', 'SONA.JK', 'SPMA.JK', 'SPRE.JK',
+    'SQMI.JK', 'SSTM.JK', 'STAR.JK', 'STTP.JK', 'SUGI.JK', 'TALF.JK', 'TARA.JK',
+    'TARGET.JK', 'TFCO.JK', 'TGKA.JK', 'TIFA.JK', 'TKIM.JK', 'TOPS.JK', 'TOTO.JK',
+    'TOYS.JK', 'TPMA.JK', 'TRAM.JK', 'TRIL.JK', 'TRUE.JK', 'UCID.JK', 'UFOE.JK',
+    'UNIC.JK', 'UNSP.JK', 'URBN.JK', 'VICO.JK', 'VOKS.JK', 'WAPO.JK', 'WEGE.JK',
+    'WICO.JK', 'WINR.JK', 'WINS.JK', 'WMUU.JK', 'WOOD.JK', 'WSBP.JK', 'YELO.JK',
+    'ZBRA.JK', 'ZYRX.JK',
 ]
 
 SECTOR_MAP = {
@@ -210,6 +246,8 @@ SECTOR_MAP = {
     'BNGA.JK': 'Perbankan', 'PNBN.JK': 'Perbankan', 'BJBR.JK': 'Perbankan', 'BJTM.JK': 'Perbankan',
     'SMIL.JK': 'Infrastruktur', 'VKTR.JK': 'Otomotif', 'GGRM.JK': 'Consumer Goods', 'CMRY.JK': 'Consumer Goods',
     'CLEO.JK': 'Consumer Goods', 'ULTJ.JK': 'Consumer Goods', 'ROTI.JK': 'Consumer Goods',
+    # Tambahan sector map (untuk 200+ IDX universe)
+    'WIIM.JK': 'Consumer Goods', 'ITIC.JK': 'Consumer Goods', 'PYFA.JK': 'Kesehatan', 'INAF.JK': 'Kesehatan', 'BSSR.JK': 'Pertambangan', 'PKPK.JK': 'Pertambangan', 'ARII.JK': 'Pertambangan', 'CITA.JK': 'Pertambangan', 'COWL.JK': 'Properti', 'DILD.JK': 'Properti', 'JRPT.JK': 'Properti', 'MKPI.JK': 'Properti', 'PLIN.JK': 'Properti', 'GMTD.JK': 'Properti', 'BAPA.JK': 'Properti', 'PUDP.JK': 'Properti', 'SKBM.JK': 'Consumer Goods', 'ADES.JK': 'Consumer Goods', 'BUDI.JK': 'Consumer Goods', 'HOKI.JK': 'Consumer Goods', 'KEJU.JK': 'Consumer Goods', 'MLBI.JK': 'Consumer Goods', 'AISA.JK': 'Consumer Goods', 'CAMP.JK': 'Consumer Goods', 'PSDN.JK': 'Consumer Goods', 'TCID.JK': 'Consumer Goods', 'TRGU.JK': 'Consumer Goods', 'DLTA.JK': 'Consumer Goods', 'GZCO.JK': 'Consumer Goods', 'BNLI.JK': 'Perbankan', 'BVIC.JK': 'Perbankan', 'INPC.JK': 'Perbankan', 'MCOR.JK': 'Perbankan', 'NAGA.JK': 'Perbankan', 'PNBS.JK': 'Perbankan', 'BSIM.JK': 'Perbankan', 'BGTG.JK': 'Perbankan', 'BMAS.JK': 'Perbankan', 'LIFE.JK': 'Asuransi', 'AMAG.JK': 'Asuransi', 'ASDM.JK': 'Asuransi', 'ASMI.JK': 'Asuransi', 'ASJT.JK': 'Asuransi', 'ABDA.JK': 'Asuransi', 'AHAP.JK': 'Asuransi', 'PNIN.JK': 'Asuransi', 'SMAR.JK': 'Asuransi', 'TMPI.JK': 'Asuransi', 'TRIM.JK': 'Keuangan', 'PANS.JK': 'Keuangan', 'KREN.JK': 'Keuangan', 'PEGE.JK': 'Keuangan', 'YULE.JK': 'Keuangan', 'AMOR.JK': 'Keuangan', 'VICI.JK': 'Keuangan', 'ACST.JK': 'Infrastruktur', 'TOTL.JK': 'Infrastruktur', 'NRCA.JK': 'Infrastruktur', 'DGIK.JK': 'Infrastruktur', 'JKON.JK': 'Infrastruktur', 'TAMA.JK': 'Infrastruktur', 'PBSA.JK': 'Infrastruktur', 'MTRA.JK': 'Infrastruktur', 'IPCM.JK': 'Infrastruktur', 'INDS.JK': 'Otomotif', 'SMSM.JK': 'Otomotif', 'IMAS.JK': 'Otomotif', 'BOLT.JK': 'Otomotif', 'GDYR.JK': 'Otomotif', 'SRSN.JK': 'Basic Materials', 'EKAD.JK': 'Basic Materials', 'INCI.JK': 'Basic Materials', 'MDKI.JK': 'Basic Materials', 'ALDO.JK': 'Basic Materials', 'YPBK.JK': 'Basic Materials', 'CLPI.JK': 'Basic Materials', 'OKAS.JK': 'Basic Materials', 'ASSA.JK': 'Transportasi', 'LRNA.JK': 'Transportasi', 'HITS.JK': 'Transportasi', 'CMPP.JK': 'Transportasi', 'GIAA.JK': 'Transportasi', 'IATA.JK': 'Transportasi', 'JSKY.JK': 'Transportasi', 'KARW.JK': 'Transportasi', 'WEHA.JK': 'Transportasi', 'RANC.JK': 'Consumer Goods', 'CSAP.JK': 'Consumer Goods', 'DAYA.JK': 'Consumer Goods', 'HERO.JK': 'Consumer Goods', 'MTFN.JK': 'Consumer Goods', 'TRIO.JK': 'Consumer Goods', 'KOPI.JK': 'Consumer Goods', 'FAST.JK': 'Consumer Goods', 'NFCX.JK': 'Consumer Goods', 'MCAS.JK': 'Consumer Goods', 'DIVA.JK': 'Consumer Goods', 'SGRO.JK': 'Perkebunan', 'TBLA.JK': 'Perkebunan', 'PALM.JK': 'Perkebunan', 'DSNG.JK': 'Perkebunan', 'JAWA.JK': 'Perkebunan', 'MGRO.JK': 'Perkebunan', 'BWPT.JK': 'Perkebunan', 'ANJT.JK': 'Perkebunan', 'GZBK.JK': 'Perkebunan', 'NIPS.JK': 'Perkebunan', 'CSIS.JK': 'Perkebunan', 'TRIS.JK': 'Perkebunan', 'BLJA.JK': 'Perkebunan', 'VIVA.JK': 'Media & Entertainment', 'BMTR.JK': 'Media & Entertainment', 'POLY.JK': 'Media & Entertainment', 'KPIF.JK': 'Media & Entertainment', 'LMAX.JK': 'Media & Entertainment', 'TFAS.JK': 'Teknologi', 'KIOS.JK': 'Teknologi', 'AGRS.JK': 'Teknologi', 'ELIT.JK': 'Teknologi', 'MCOL.JK': 'Teknologi', 'JAST.JK': 'Teknologi', 'ENVY.JK': 'Teknologi', 'ZONE.JK': 'Teknologi', 'CASH.JK': 'Teknologi', 'PTSN.JK': 'Teknologi', 'DMMX.JK': 'Teknologi', 'IRSX.JK': 'Teknologi', 'VISI.JK': 'Teknologi', 'HDIT.JK': 'Teknologi', 'LUCK.JK': 'Teknologi', 'DEAL.JK': 'Teknologi', 'APLN.JK': 'Properti', 'ARCI.JK': 'Properti', 'AGII.JK': 'Properti', 'FASW.JK': 'Properti', 'HKMU.JK': 'Properti', 'INDX.JK': 'Properti', 'JPRS.JK': 'Properti', 'JTPE.JK': 'Properti', 'KAYU.JK': 'Properti', 'KDTN.JK': 'Properti', 'LPCK.JK': 'Properti', 'MARK.JK': 'Properti', 'MDLN.JK': 'Properti', 'MERI.JK': 'Properti', 'META.JK': 'Properti', 'MICE.JK': 'Properti', 'MINA.JK': 'Properti', 'MPRO.JK': 'Properti', 'MTMH.JK': 'Properti', 'MYTX.JK': 'Properti', 'NUSA.JK': 'Properti', 'OASA.JK': 'Properti', 'OMRE.JK': 'Properti', 'PADA.JK': 'Properti', 'PAM.JK': 'Properti', 'PGJO.JK': 'Properti', 'PGLI.JK': 'Properti', 'PJAA.JK': 'Properti', 'PNGO.JK': 'Properti', 'POWR.JK': 'Properti', 'PPGL.JK': 'Properti', 'PRAS.JK': 'Properti', 'PRDA.JK': 'Properti', 'PRIM.JK': 'Properti', 'PTIS.JK': 'Properti', 'RAAM.JK': 'Properti', 'RBMS.JK': 'Properti', 'REAL.JK': 'Properti', 'RIMO.JK': 'Properti', 'ROCK.JK': 'Properti', 'RODA.JK': 'Properti', 'RUIS.JK': 'Properti', 'SAME.JK': 'Properti', 'SAPX.JK': 'Properti', 'SDMU.JK': 'Properti', 'SFAN.JK': 'Properti', 'SGER.JK': 'Properti', 'SHEET.JK': 'Properti', 'SHID.JK': 'Properti', 'SIMA.JK': 'Properti', 'SKRN.JK': 'Properti', 'SLIS.JK': 'Properti', 'SMBR.JK': 'Properti', 'SMCB.JK': 'Properti', 'SMDM.JK': 'Properti', 'SMGA.JK': 'Properti', 'SMKL.JK': 'Properti', 'SMMT.JK': 'Properti', 'SMRU.JK': 'Properti', 'SOCI.JK': 'Properti', 'SOFA.JK': 'Properti', 'SOLA.JK': 'Properti', 'SONA.JK': 'Properti', 'SPMA.JK': 'Properti', 'SPRE.JK': 'Properti', 'SQMI.JK': 'Properti', 'SSTM.JK': 'Properti', 'STAR.JK': 'Properti', 'STTP.JK': 'Properti', 'SUGI.JK': 'Properti', 'TALF.JK': 'Properti', 'TARA.JK': 'Properti', 'TARGET.JK': 'Properti', 'TFCO.JK': 'Properti', 'TGKA.JK': 'Properti', 'TIFA.JK': 'Properti', 'TKIM.JK': 'Properti', 'TOPS.JK': 'Properti', 'TOTO.JK': 'Properti', 'TOYS.JK': 'Properti', 'TPMA.JK': 'Properti', 'TRAM.JK': 'Properti', 'TRIL.JK': 'Properti', 'TRUE.JK': 'Properti', 'UCID.JK': 'Properti', 'UFOE.JK': 'Properti', 'UNIC.JK': 'Properti', 'UNSP.JK': 'Properti', 'URBN.JK': 'Properti', 'VICO.JK': 'Properti', 'VOKS.JK': 'Properti', 'WAPO.JK': 'Properti', 'WEGE.JK': 'Properti', 'WICO.JK': 'Properti', 'WINR.JK': 'Properti', 'WINS.JK': 'Properti', 'WMUU.JK': 'Properti', 'WOOD.JK': 'Properti', 'WSBP.JK': 'Properti', 'YELO.JK': 'Properti', 'ZBRA.JK': 'Properti', 'ZYRX.JK': 'Properti',
 }
 
 
@@ -286,8 +324,9 @@ def _calc_card_indicators(history: pd.DataFrame) -> Dict[str, float]:
 def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
     try:
         ticker = yf.Ticker(symbol)
-        history = ticker.history(period='1mo', timeout=4)
-        if history.empty or len(history) < 5:
+        # 5d history is enough for list view (we need last_price, prev_close, volume only)
+        history = ticker.history(period='5d', timeout=3)
+        if history.empty or len(history) < 2:
             return None
         try:
             info = ticker.fast_info or {}
@@ -297,8 +336,8 @@ def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
         if current_price is None or current_price < MIN_PRICE:
             return None
         volume = _safe_float(info.get('last_volume') or history['Volume'].iloc[-1]) or 0.0
-        avg_volume = _safe_float(history['Volume'].tail(20).mean()) or 0.0
-        avg_value = _safe_float((history['Close'].tail(20) * history['Volume'].tail(20)).mean()) or 0.0
+        avg_volume = _safe_float(history['Volume'].tail(5).mean()) or 0.0  # 5d avg, lighter than 20d
+        avg_value = _safe_float((history['Close'].tail(5) * history['Volume'].tail(5)).mean()) or 0.0
         if volume < MIN_VOLUME and avg_volume < MIN_VOLUME:
             return None
         if avg_value < MIN_AVG_VALUE and volume < MIN_VOLUME:
@@ -333,11 +372,11 @@ def get_top_stocks() -> List[Dict[str, Any]]:
         return cached
 
     results = []
-    executor = ThreadPoolExecutor(max_workers=8)
+    executor = ThreadPoolExecutor(max_workers=20)
     futures = [executor.submit(_fetch_stock_card, symbol) for symbol in INDONESIAN_STOCKS[:MAX_UNIVERSE]]
     try:
-        deadline = now + 5
-        for fut in as_completed(futures, timeout=6):
+        deadline = now + 30  # 30s timeout so 300+ stocks can fetch on cold cache
+        for fut in as_completed(futures, timeout=32):
             if time.time() > deadline:
                 break
             item = fut.result()

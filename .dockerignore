@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+env/
+venv/
+.venv/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+dist/
+
+# Database
+backend/signals.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log

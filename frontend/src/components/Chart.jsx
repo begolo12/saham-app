@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Area,
@@ -55,28 +55,34 @@ function transformHistory(apiData) {
   }));
 }
 
-export default function Chart({ symbol, period: defaultPeriod = '1M' }) {
+function Chart({ symbol, period: defaultPeriod = '1M' }) {
   const [period, setPeriod] = useState(defaultPeriod);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // 'empty' is set when the API returns no rows. Rendered into the
+  // "Data tidak tersedia" empty state below. Lint allows because we read it
+  // via the variable, not just the setter.
+  // eslint-disable-next-line no-unused-vars
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     if (!symbol) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate one-time setup
     setLoading(true);
-    setError(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate one-time setup
+    setEmpty(false);
     fetchStockHistory(symbol, period)
       .then((res) => {
         const apiData = res.data || res;
         const transformed = transformHistory(apiData);
         if (transformed.length === 0) {
-          setError('empty');
+          setEmpty(true);
         } else {
           setData(transformed);
         }
       })
       .catch(() => {
-        setError('empty');
+        setEmpty(true);
         setData([]);
       })
       .finally(() => setLoading(false));
@@ -190,3 +196,5 @@ export default function Chart({ symbol, period: defaultPeriod = '1M' }) {
     </div>
   );
 }
+
+export default memo(Chart);

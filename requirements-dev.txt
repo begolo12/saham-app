@@ -1,0 +1,7 @@
+pytest>=8.0
+pytest-asyncio>=0.24
+httpx>=0.28
+slowapi>=0.1.9
+# tests also use the main requirements:
+# fastapi, uvicorn, yfinance, pandas, numpy, pydantic, python-multipart
+-r requirements.txt

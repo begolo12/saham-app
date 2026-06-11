@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8774:8774"
+    environment:
+      - POSTGRES_URL=${POSTGRES_URL:-}
+      - SAHAM_AUTH_SECRET=${SAHAM_AUTH_SECRET:-}
+      - SAHAM_ADMIN_USERNAME=${SAHAM_ADMIN_USERNAME:-admin}
+      - SAHAM_ADMIN_PASSWORD=${SAHAM_ADMIN_PASSWORD:-admin123}
+    volumes:
+      - signals_data:/app/signals.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8774/docs')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "5180:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  signals_data:

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 
 const SIGNAL_ICONS = { BUY: '▲', SELL: '▼', HOLD: '◆' };
 const SIGNAL_LABELS = { BUY: 'BELI', SELL: 'JUAL', HOLD: 'TAHAN' };
@@ -28,7 +28,7 @@ function SignalRing({ strength, color, size = 28 }) {
   );
 }
 
-export default function SignalBadge({ signal, strength, large }) {
+function SignalBadge({ signal, strength, large }) {
   const c = COLORS[signal] || COLORS.HOLD;
   const [pulse, setPulse] = useState(false);
   const prevRef = useRef(signal);
@@ -68,3 +68,5 @@ export default function SignalBadge({ signal, strength, large }) {
     </div>
   );
 }
+
+export default memo(SignalBadge);

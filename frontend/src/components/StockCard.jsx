@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import SignalBadge from './SignalBadge';
+import { lightHaptic } from '../utils/haptic';
+import { LIQUIDITY_THRESHOLD } from '../constants';
 
 const SECTOR_COLORS = {
   finance: { bg: 'rgba(52,199,89,0.12)', text: '#34C759' },
@@ -103,13 +105,13 @@ function StockCard({ stock, onClick, watchlist, onToggleWatchlist, index = 0, gr
             </span>
              {stock.volume != null && (
                <span style={{ fontSize: 10, color: '#636366', marginTop: 2 }}>
-                 {stock.volume < 100000 ? '⚠ Vol: ' : 'Vol: '}
+                 {stock.volume < LIQUIDITY_THRESHOLD ? '⚠ Vol: ' : 'Vol: '}
                  {Number(stock.volume).toLocaleString('id-ID')}
                </span>
              )}
             <button
               className={`star-btn${isWatched ? ' active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); onToggleWatchlist?.(stock.symbol); }}
+              onClick={(e) => { e.stopPropagation(); lightHaptic(); onToggleWatchlist?.(stock.symbol); }}
               style={{ fontSize: 16 }}
             >
               {isWatched ? '★' : '☆'}
@@ -143,14 +145,14 @@ function StockCard({ stock, onClick, watchlist, onToggleWatchlist, index = 0, gr
           <div className="stock-card-bottom">
             <button
               className={`star-btn${isWatched ? ' active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); onToggleWatchlist?.(stock.symbol); }}
+              onClick={(e) => { e.stopPropagation(); lightHaptic(); onToggleWatchlist?.(stock.symbol); }}
             >
               {isWatched ? '★' : '☆'}
             </button>
              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                {stock.volume != null && (
                  <span style={{ fontSize: 10, color: '#636366' }}>
-                   {stock.volume < 500000 ? '⚠ ' : ''}Vol: {Number(stock.volume).toLocaleString('id-ID')}
+                   {stock.volume < LIQUIDITY_THRESHOLD ? '⚠ ' : ''}Vol: {Number(stock.volume).toLocaleString('id-ID')}
                  </span>
                )}
                {stock.potential_score != null && (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import SignalBadge from './SignalBadge';
 import Chart from './Chart';
 import { fetchStockDetail, fetchStockRecommendationHistory } from '../api';
@@ -30,31 +31,37 @@ function FundRow({ label, value }) {
 
 const TABS = ['Teknikal', 'Fundamental', 'Sinyal', 'Riwayat'];
 
-export default function StockDetail({ stock, onBack }) {
+export default function StockDetail() {
+  const { symbol } = useParams();
+  const navigate = useNavigate();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('Teknikal');
   const [signalHistory, setSignalHistory] = useState([]);
 
   useEffect(() => {
-    if (!stock?.symbol) return;
+    if (!symbol) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate one-time setup
     setDetail(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate one-time setup
     setSignalHistory([]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate one-time setup
     setLoading(true);
-    fetchStockDetail(stock.symbol)
+    fetchStockDetail(symbol)
       .then((res) => setDetail(res.data || res))
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
-  }, [stock?.symbol]);
+  }, [symbol]);
 
   useEffect(() => {
-    if (activeTab !== 'Riwayat' || !stock?.symbol || signalHistory.length) return;
-    fetchStockRecommendationHistory(stock.symbol)
+    if (activeTab !== 'Riwayat' || !symbol || signalHistory.length) return;
+    fetchStockRecommendationHistory(symbol)
       .then((res) => setSignalHistory(res.history || []))
       .catch(() => setSignalHistory([]));
-  }, [activeTab, stock?.symbol, signalHistory.length]);
+  }, [activeTab, symbol, signalHistory.length]);
 
-  const d = detail || stock || {};
+  const initialStock = { symbol };
+  const d = detail || initialStock;
   const price = d.price ?? 0;
   const changePct = d.change_percent ?? 0;
   const isPositive = changePct >= 0;
@@ -68,7 +75,7 @@ export default function StockDetail({ stock, onBack }) {
 
   return (
     <div className="stock-detail">
-      <button className="detail-back" onClick={onBack}><span className="detail-back-arrow">←</span> Kembali</button>
+      <button className="detail-back" onClick={() => navigate(-1)}><span className="detail-back-arrow">←</span> Kembali</button>
 
       <div className="detail-hero">
         <h2 className="detail-hero-symbol">{d.symbol}</h2>
@@ -140,8 +147,6 @@ export default function StockDetail({ stock, onBack }) {
           <ul className="reason-list">{fundReasons.map((r, i) => <li key={i} className="reason-item"><span className="reason-icon">📊</span><span>{r}</span></li>)}</ul>
         </div>
       )}
-
-
 
       {activeTab === 'Sinyal' && (
         <div className="detail-section overall-signal-section">

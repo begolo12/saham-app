@@ -1,0 +1,1294 @@
+{
+  "total_universe": 147,
+  "ok_count": 146,
+  "failed_count": 1,
+  "failed_symbols": [
+    "FREN.JK"
+  ],
+  "above_100k_count": 136,
+  "above_500k_count": 133,
+  "above_1m_count": 132,
+  "above_100k_stocks": [
+    {
+      "symbol": "BUMI",
+      "avg_volume": 4748718820
+    },
+    {
+      "symbol": "TPIA",
+      "avg_volume": 2128292180
+    },
+    {
+      "symbol": "DSSA",
+      "avg_volume": 938966060
+    },
+    {
+      "symbol": "CUAN",
+      "avg_volume": 905887680
+    },
+    {
+      "symbol": "DEWA",
+      "avg_volume": 894786680
+    },
+    {
+      "symbol": "BBCA",
+      "avg_volume": 668252940
+    },
+    {
+      "symbol": "BBRI",
+      "avg_volume": 596028740
+    },
+    {
+      "symbol": "BRPT",
+      "avg_volume": 437070560
+    },
+    {
+      "symbol": "BMRI",
+      "avg_volume": 372189760
+    },
+    {
+      "symbol": "BULL",
+      "avg_volume": 371016260
+    },
+    {
+      "symbol": "BKSL",
+      "avg_volume": 308572720
+    },
+    {
+      "symbol": "ANTM",
+      "avg_volume": 300616920
+    },
+    {
+      "symbol": "GOTO",
+      "avg_volume": 298428520
+    },
+    {
+      "symbol": "TLKM",
+      "avg_volume": 295044740
+    },
+    {
+      "symbol": "INET",
+      "avg_volume": 255103580
+    },
+    {
+      "symbol": "MBMA",
+      "avg_volume": 216545360
+    },
+    {
+      "symbol": "ELTY",
+      "avg_volume": 211212120
+    },
+    {
+      "symbol": "PWON",
+      "avg_volume": 207242460
+    },
+    {
+      "symbol": "PSAB",
+      "avg_volume": 187192920
+    },
+    {
+      "symbol": "AMMN",
+      "avg_volume": 165544760
+    },
+    {
+      "symbol": "TOWR",
+      "avg_volume": 164287960
+    },
+    {
+      "symbol": "BBNI",
+      "avg_volume": 153053280
+    },
+    {
+      "symbol": "BUKA",
+      "avg_volume": 126154980
+    },
+    {
+      "symbol": "MDKA",
+      "avg_volume": 116846680
+    },
+    {
+      "symbol": "CDIA",
+      "avg_volume": 102268700
+    },
+    {
+      "symbol": "WIRG",
+      "avg_volume": 100293440
+    },
+    {
+      "symbol": "AMRT",
+      "avg_volume": 96262340
+    },
+    {
+      "symbol": "PTRO",
+      "avg_volume": 93793860
+    },
+    {
+      "symbol": "KIJA",
+      "avg_volume": 93277220
+    },
+    {
+      "symbol": "ENRG",
+      "avg_volume": 91799700
+    },
+    {
+      "symbol": "VKTR",
+      "avg_volume": 86279140
+    },
+    {
+      "symbol": "PNLF",
+      "avg_volume": 85097480
+    },
+    {
+      "symbol": "ASII",
+      "avg_volume": 82223700
+    },
+    {
+      "symbol": "MEDC",
+      "avg_volume": 77479640
+    },
+    {
+      "symbol": "MDIA",
+      "avg_volume": 76084480
+    },
+    {
+      "symbol": "ESSA",
+      "avg_volume": 75038740
+    },
+    {
+      "symbol": "KLBF",
+      "avg_volume": 71807760
+    },
+    {
+      "symbol": "MAPI",
+      "avg_volume": 70046380
+    },
+    {
+      "symbol": "TINS",
+      "avg_volume": 69874260
+    },
+    {
+      "symbol": "WIFI",
+      "avg_volume": 69779520
+    },
+    {
+      "symbol": "PGAS",
+      "avg_volume": 66591400
+    },
+    {
+      "symbol": "BREN",
+      "avg_volume": 66297220
+    },
+    {
+      "symbol": "MSIN",
+      "avg_volume": 61478320
+    },
+    {
+      "symbol": "LPKR",
+      "avg_volume": 56548060
+    },
+    {
+      "symbol": "EMTK",
+      "avg_volume": 54939320
+    },
+    {
+      "symbol": "ADMR",
+      "avg_volume": 54568840
+    },
+    {
+      "symbol": "ADRO",
+      "avg_volume": 48736320
+    },
+    {
+      "symbol": "NCKL",
+      "avg_volume": 47756640
+    },
+    {
+      "symbol": "JPFA",
+      "avg_volume": 47404860
+    },
+    {
+      "symbol": "SCMA",
+      "avg_volume": 47237960
+    },
+    {
+      "symbol": "RAJA",
+      "avg_volume": 46697600
+    },
+    {
+      "symbol": "ACES",
+      "avg_volume": 40917840
+    },
+    {
+      "symbol": "ERAA",
+      "avg_volume": 39253480
+    },
+    {
+      "symbol": "NIKL",
+      "avg_volume": 37724860
+    },
+    {
+      "symbol": "AKRA",
+      "avg_volume": 33730640
+    },
+    {
+      "symbol": "PPRO",
+      "avg_volume": 31004420
+    },
+    {
+      "symbol": "ELSA",
+      "avg_volume": 30986420
+    },
+    {
+      "symbol": "INCO",
+      "avg_volume": 30477280
+    },
+    {
+      "symbol": "ISAT",
+      "avg_volume": 30448900
+    },
+    {
+      "symbol": "BRIS",
+      "avg_volume": 29122100
+    },
+    {
+      "symbol": "MNCN",
+      "avg_volume": 28597080
+    },
+    {
+      "symbol": "SMRA",
+      "avg_volume": 24752460
+    },
+    {
+      "symbol": "PGEO",
+      "avg_volume": 24648660
+    },
+    {
+      "symbol": "TAPG",
+      "avg_volume": 24218580
+    },
+    {
+      "symbol": "SIDO",
+      "avg_volume": 23986700
+    },
+    {
+      "symbol": "INDY",
+      "avg_volume": 23091480
+    },
+    {
+      "symbol": "PTBA",
+      "avg_volume": 22932280
+    },
+    {
+      "symbol": "BBTN",
+      "avg_volume": 22793860
+    },
+    {
+      "symbol": "MAPA",
+      "avg_volume": 22362920
+    },
+    {
+      "symbol": "UNVR",
+      "avg_volume": 22335440
+    },
+    {
+      "symbol": "SSIA",
+      "avg_volume": 20696480
+    },
+    {
+      "symbol": "BFIN",
+      "avg_volume": 20124280
+    },
+    {
+      "symbol": "HMSP",
+      "avg_volume": 19254880
+    },
+    {
+      "symbol": "CTRA",
+      "avg_volume": 19239880
+    },
+    {
+      "symbol": "MTEL",
+      "avg_volume": 19079820
+    },
+    {
+      "symbol": "HRTA",
+      "avg_volume": 18462660
+    },
+    {
+      "symbol": "MIDI",
+      "avg_volume": 17686700
+    },
+    {
+      "symbol": "AADI",
+      "avg_volume": 16886700
+    },
+    {
+      "symbol": "BSDE",
+      "avg_volume": 15111300
+    },
+    {
+      "symbol": "BJTM",
+      "avg_volume": 15101480
+    },
+    {
+      "symbol": "CPIN",
+      "avg_volume": 14823620
+    },
+    {
+      "symbol": "LSIP",
+      "avg_volume": 14282480
+    },
+    {
+      "symbol": "TOBA",
+      "avg_volume": 13698620
+    },
+    {
+      "symbol": "HRUM",
+      "avg_volume": 13503760
+    },
+    {
+      "symbol": "SMGR",
+      "avg_volume": 13301300
+    },
+    {
+      "symbol": "SSMS",
+      "avg_volume": 12867580
+    },
+    {
+      "symbol": "AGRO",
+      "avg_volume": 12123700
+    },
+    {
+      "symbol": "SMDR",
+      "avg_volume": 12103740
+    },
+    {
+      "symbol": "INDF",
+      "avg_volume": 12043580
+    },
+    {
+      "symbol": "RATU",
+      "avg_volume": 11732760
+    },
+    {
+      "symbol": "DKFT",
+      "avg_volume": 10366760
+    },
+    {
+      "symbol": "EXCL",
+      "avg_volume": 10114220
+    },
+    {
+      "symbol": "ARTO",
+      "avg_volume": 9389000
+    },
+    {
+      "symbol": "MIKA",
+      "avg_volume": 9033540
+    },
+    {
+      "symbol": "NICL",
+      "avg_volume": 8792440
+    },
+    {
+      "symbol": "SMIL",
+      "avg_volume": 8785500
+    },
+    {
+      "symbol": "NISP",
+      "avg_volume": 8572560
+    },
+    {
+      "symbol": "BNGA",
+      "avg_volume": 8025860
+    },
+    {
+      "symbol": "PANI",
+      "avg_volume": 7978620
+    },
+    {
+      "symbol": "CLEO",
+      "avg_volume": 7939320
+    },
+    {
+      "symbol": "ICBP",
+      "avg_volume": 7710080
+    },
+    {
+      "symbol": "BTPS",
+      "avg_volume": 7638720
+    },
+    {
+      "symbol": "JSMR",
+      "avg_volume": 7348500
+    },
+    {
+      "symbol": "FILM",
+      "avg_volume": 7182440
+    },
+    {
+      "symbol": "PNBN",
+      "avg_volume": 7007040
+    },
+    {
+      "symbol": "BANK",
+      "avg_volume": 6806840
+    },
+    {
+      "symbol": "MYOR",
+      "avg_volume": 6589980
+    },
+    {
+      "symbol": "BEST",
+      "avg_volume": 6559180
+    },
+    {
+      "symbol": "PTPP",
+      "avg_volume": 6516780
+    },
+    {
+      "symbol": "ULTJ",
+      "avg_volume": 6400500
+    },
+    {
+      "symbol": "WTON",
+      "avg_volume": 5970500
+    },
+    {
+      "symbol": "HEAL",
+      "avg_volume": 5790240
+    },
+    {
+      "symbol": "BJBR",
+      "avg_volume": 5505920
+    },
+    {
+      "symbol": "SRTG",
+      "avg_volume": 5475760
+    },
+    {
+      "symbol": "ADHI",
+      "avg_volume": 5384680
+    },
+    {
+      "symbol": "ITMG",
+      "avg_volume": 5285980
+    },
+    {
+      "symbol": "RALS",
+      "avg_volume": 5227600
+    },
+    {
+      "symbol": "GJTL",
+      "avg_volume": 5066800
+    },
+    {
+      "symbol": "DOID",
+      "avg_volume": 4336940
+    },
+    {
+      "symbol": "INTP",
+      "avg_volume": 4106360
+    },
+    {
+      "symbol": "CMRY",
+      "avg_volume": 4038060
+    },
+    {
+      "symbol": "AALI",
+      "avg_volume": 3001520
+    },
+    {
+      "symbol": "AUTO",
+      "avg_volume": 2635220
+    },
+    {
+      "symbol": "ROTI",
+      "avg_volume": 2556280
+    },
+    {
+      "symbol": "TBIG",
+      "avg_volume": 2548220
+    },
+    {
+      "symbol": "MAYA",
+      "avg_volume": 2503840
+    },
+    {
+      "symbol": "LPPF",
+      "avg_volume": 2174120
+    },
+    {
+      "symbol": "MTDL",
+      "avg_volume": 1783040
+    },
+    {
+      "symbol": "TSPC",
+      "avg_volume": 1727860
+    },
+    {
+      "symbol": "KAEF",
+      "avg_volume": 1401160
+    },
+    {
+      "symbol": "GGRM",
+      "avg_volume": 1318140
+    },
+    {
+      "symbol": "SDRA",
+      "avg_volume": 1110460
+    },
+    {
+      "symbol": "BABP",
+      "avg_volume": 562820
+    },
+    {
+      "symbol": "SILO",
+      "avg_volume": 244700
+    },
+    {
+      "symbol": "MERK",
+      "avg_volume": 135240
+    },
+    {
+      "symbol": "MTLA",
+      "avg_volume": 115180
+    }
+  ],
+  "all_results": [
+    {
+      "symbol": "BBCA",
+      "avg_volume": 668252940,
+      "status": "ok"
+    },
+    {
+      "symbol": "BBRI",
+      "avg_volume": 596028740,
+      "status": "ok"
+    },
+    {
+      "symbol": "BMRI",
+      "avg_volume": 372189760,
+      "status": "ok"
+    },
+    {
+      "symbol": "BBNI",
+      "avg_volume": 153053280,
+      "status": "ok"
+    },
+    {
+      "symbol": "BRIS",
+      "avg_volume": 29122100,
+      "status": "ok"
+    },
+    {
+      "symbol": "BBTN",
+      "avg_volume": 22793860,
+      "status": "ok"
+    },
+    {
+      "symbol": "NISP",
+      "avg_volume": 8572560,
+      "status": "ok"
+    },
+    {
+      "symbol": "UNVR",
+      "avg_volume": 22335440,
+      "status": "ok"
+    },
+    {
+      "symbol": "ICBP",
+      "avg_volume": 7710080,
+      "status": "ok"
+    },
+    {
+      "symbol": "INDF",
+      "avg_volume": 12043580,
+      "status": "ok"
+    },
+    {
+      "symbol": "KLBF",
+      "avg_volume": 71807760,
+      "status": "ok"
+    },
+    {
+      "symbol": "HMSP",
+      "avg_volume": 19254880,
+      "status": "ok"
+    },
+    {
+      "symbol": "MYOR",
+      "avg_volume": 6589980,
+      "status": "ok"
+    },
+    {
+      "symbol": "SIDO",
+      "avg_volume": 23986700,
+      "status": "ok"
+    },
+    {
+      "symbol": "SDRA",
+      "avg_volume": 1110460,
+      "status": "ok"
+    },
+    {
+      "symbol": "TSPC",
+      "avg_volume": 1727860,
+      "status": "ok"
+    },
+    {
+      "symbol": "SCCO",
+      "avg_volume": 53460,
+      "status": "ok"
+    },
+    {
+      "symbol": "BRAM",
+      "avg_volume": 7180,
+      "status": "ok"
+    },
+    {
+      "symbol": "CPIN",
+      "avg_volume": 14823620,
+      "status": "ok"
+    },
+    {
+      "symbol": "JPFA",
+      "avg_volume": 47404860,
+      "status": "ok"
+    },
+    {
+      "symbol": "MAPI",
+      "avg_volume": 70046380,
+      "status": "ok"
+    },
+    {
+      "symbol": "ACES",
+      "avg_volume": 40917840,
+      "status": "ok"
+    },
+    {
+      "symbol": "ERAA",
+      "avg_volume": 39253480,
+      "status": "ok"
+    },
+    {
+      "symbol": "RALS",
+      "avg_volume": 5227600,
+      "status": "ok"
+    },
+    {
+      "symbol": "LPPF",
+      "avg_volume": 2174120,
+      "status": "ok"
+    },
+    {
+      "symbol": "ADRO",
+      "avg_volume": 48736320,
+      "status": "ok"
+    },
+    {
+      "symbol": "PTBA",
+      "avg_volume": 22932280,
+      "status": "ok"
+    },
+    {
+      "symbol": "ITMG",
+      "avg_volume": 5285980,
+      "status": "ok"
+    },
+    {
+      "symbol": "MEDC",
+      "avg_volume": 77479640,
+      "status": "ok"
+    },
+    {
+      "symbol": "PGAS",
+      "avg_volume": 66591400,
+      "status": "ok"
+    },
+    {
+      "symbol": "AKRA",
+      "avg_volume": 33730640,
+      "status": "ok"
+    },
+    {
+      "symbol": "ELSA",
+      "avg_volume": 30986420,
+      "status": "ok"
+    },
+    {
+      "symbol": "BUMI",
+      "avg_volume": 4748718820,
+      "status": "ok"
+    },
+    {
+      "symbol": "INDY",
+      "avg_volume": 23091480,
+      "status": "ok"
+    },
+    {
+      "symbol": "JSMR",
+      "avg_volume": 7348500,
+      "status": "ok"
+    },
+    {
+      "symbol": "WIKA",
+      "avg_volume": 0,
+      "status": "ok"
+    },
+    {
+      "symbol": "WSKT",
+      "avg_volume": 0,
+      "status": "ok"
+    },
+    {
+      "symbol": "ADHI",
+      "avg_volume": 5384680,
+      "status": "ok"
+    },
+    {
+      "symbol": "PTPP",
+      "avg_volume": 6516780,
+      "status": "ok"
+    },
+    {
+      "symbol": "INTP",
+      "avg_volume": 4106360,
+      "status": "ok"
+    },
+    {
+      "symbol": "SMGR",
+      "avg_volume": 13301300,
+      "status": "ok"
+    },
+    {
+      "symbol": "CTRA",
+      "avg_volume": 19239880,
+      "status": "ok"
+    },
+    {
+      "symbol": "PWON",
+      "avg_volume": 207242460,
+      "status": "ok"
+    },
+    {
+      "symbol": "BSDE",
+      "avg_volume": 15111300,
+      "status": "ok"
+    },
+    {
+      "symbol": "SMRA",
+      "avg_volume": 24752460,
+      "status": "ok"
+    },
+    {
+      "symbol": "LPKR",
+      "avg_volume": 56548060,
+      "status": "ok"
+    },
+    {
+      "symbol": "PPRO",
+      "avg_volume": 31004420,
+      "status": "ok"
+    },
+    {
+      "symbol": "MTLA",
+      "avg_volume": 115180,
+      "status": "ok"
+    },
+    {
+      "symbol": "AALI",
+      "avg_volume": 3001520,
+      "status": "ok"
+    },
+    {
+      "symbol": "LSIP",
+      "avg_volume": 14282480,
+      "status": "ok"
+    },
+    {
+      "symbol": "TAPG",
+      "avg_volume": 24218580,
+      "status": "ok"
+    },
+    {
+      "symbol": "SSMS",
+      "avg_volume": 12867580,
+      "status": "ok"
+    },
+    {
+      "symbol": "ANTM",
+      "avg_volume": 300616920,
+      "status": "ok"
+    },
+    {
+      "symbol": "MDKA",
+      "avg_volume": 116846680,
+      "status": "ok"
+    },
+    {
+      "symbol": "BRPT",
+      "avg_volume": 437070560,
+      "status": "ok"
+    },
+    {
+      "symbol": "INCO",
+      "avg_volume": 30477280,
+      "status": "ok"
+    },
+    {
+      "symbol": "NCKL",
+      "avg_volume": 47756640,
+      "status": "ok"
+    },
+    {
+      "symbol": "TINS",
+      "avg_volume": 69874260,
+      "status": "ok"
+    },
+    {
+      "symbol": "ADMR",
+      "avg_volume": 54568840,
+      "status": "ok"
+    },
+    {
+      "symbol": "MIKA",
+      "avg_volume": 9033540,
+      "status": "ok"
+    },
+    {
+      "symbol": "SILO",
+      "avg_volume": 244700,
+      "status": "ok"
+    },
+    {
+      "symbol": "KAEF",
+      "avg_volume": 1401160,
+      "status": "ok"
+    },
+    {
+      "symbol": "DVLA",
+      "avg_volume": 30200,
+      "status": "ok"
+    },
+    {
+      "symbol": "MERK",
+      "avg_volume": 135240,
+      "status": "ok"
+    },
+    {
+      "symbol": "HEAL",
+      "avg_volume": 5790240,
+      "status": "ok"
+    },
+    {
+      "symbol": "TLKM",
+      "avg_volume": 295044740,
+      "status": "ok"
+    },
+    {
+      "symbol": "EXCL",
+      "avg_volume": 10114220,
+      "status": "ok"
+    },
+    {
+      "symbol": "ISAT",
+      "avg_volume": 30448900,
+      "status": "ok"
+    },
+    {
+      "symbol": "MTEL",
+      "avg_volume": 19079820,
+      "status": "ok"
+    },
+    {
+      "symbol": "TOWR",
+      "avg_volume": 164287960,
+      "status": "ok"
+    },
+    {
+      "symbol": "TBIG",
+      "avg_volume": 2548220,
+      "status": "ok"
+    },
+    {
+      "symbol": "ASII",
+      "avg_volume": 82223700,
+      "status": "ok"
+    },
+    {
+      "symbol": "AUTO",
+      "avg_volume": 2635220,
+      "status": "ok"
+    },
+    {
+      "symbol": "GJTL",
+      "avg_volume": 5066800,
+      "status": "ok"
+    },
+    {
+      "symbol": "GOTO",
+      "avg_volume": 298428520,
+      "status": "ok"
+    },
+    {
+      "symbol": "BUKA",
+      "avg_volume": 126154980,
+      "status": "ok"
+    },
+    {
+      "symbol": "WIRG",
+      "avg_volume": 100293440,
+      "status": "ok"
+    },
+    {
+      "symbol": "DCII",
+      "avg_volume": 1880,
+      "status": "ok"
+    },
+    {
+      "symbol": "MTDL",
+      "avg_volume": 1783040,
+      "status": "ok"
+    },
+    {
+      "symbol": "EMTK",
+      "avg_volume": 54939320,
+      "status": "ok"
+    },
+    {
+      "symbol": "MNCN",
+      "avg_volume": 28597080,
+      "status": "ok"
+    },
+    {
+      "symbol": "SCMA",
+      "avg_volume": 47237960,
+      "status": "ok"
+    },
+    {
+      "symbol": "MDIA",
+      "avg_volume": 76084480,
+      "status": "ok"
+    },
+    {
+      "symbol": "PGEO",
+      "avg_volume": 24648660,
+      "status": "ok"
+    },
+    {
+      "symbol": "ENRG",
+      "avg_volume": 91799700,
+      "status": "ok"
+    },
+    {
+      "symbol": "DEWA",
+      "avg_volume": 894786680,
+      "status": "ok"
+    },
+    {
+      "symbol": "DOID",
+      "avg_volume": 4336940,
+      "status": "ok"
+    },
+    {
+      "symbol": "HRUM",
+      "avg_volume": 13503760,
+      "status": "ok"
+    },
+    {
+      "symbol": "RAJA",
+      "avg_volume": 46697600,
+      "status": "ok"
+    },
+    {
+      "symbol": "TOBA",
+      "avg_volume": 13698620,
+      "status": "ok"
+    },
+    {
+      "symbol": "PNLF",
+      "avg_volume": 85097480,
+      "status": "ok"
+    },
+    {
+      "symbol": "BABP",
+      "avg_volume": 562820,
+      "status": "ok"
+    },
+    {
+      "symbol": "AGRO",
+      "avg_volume": 12123700,
+      "status": "ok"
+    },
+    {
+      "symbol": "ARTO",
+      "avg_volume": 9389000,
+      "status": "ok"
+    },
+    {
+      "symbol": "BFIN",
+      "avg_volume": 20124280,
+      "status": "ok"
+    },
+    {
+      "symbol": "WIFI",
+      "avg_volume": 69779520,
+      "status": "ok"
+    },
+    {
+      "symbol": "LINK",
+      "avg_volume": 21060,
+      "status": "ok"
+    },
+    {
+      "symbol": "FREN",
+      "avg_volume": null,
+      "status": "no data"
+    },
+    {
+      "symbol": "BULL",
+      "avg_volume": 371016260,
+      "status": "ok"
+    },
+    {
+      "symbol": "SMDR",
+      "avg_volume": 12103740,
+      "status": "ok"
+    },
+    {
+      "symbol": "TPIA",
+      "avg_volume": 2128292180,
+      "status": "ok"
+    },
+    {
+      "symbol": "ESSA",
+      "avg_volume": 75038740,
+      "status": "ok"
+    },
+    {
+      "symbol": "AMMN",
+      "avg_volume": 165544760,
+      "status": "ok"
+    },
+    {
+      "symbol": "MBMA",
+      "avg_volume": 216545360,
+      "status": "ok"
+    },
+    {
+      "symbol": "CUAN",
+      "avg_volume": 905887680,
+      "status": "ok"
+    },
+    {
+      "symbol": "BREN",
+      "avg_volume": 66297220,
+      "status": "ok"
+    },
+    {
+      "symbol": "PTRO",
+      "avg_volume": 93793860,
+      "status": "ok"
+    },
+    {
+      "symbol": "CDIA",
+      "avg_volume": 102268700,
+      "status": "ok"
+    },
+    {
+      "symbol": "PANI",
+      "avg_volume": 7978620,
+      "status": "ok"
+    },
+    {
+      "symbol": "DSSA",
+      "avg_volume": 938966060,
+      "status": "ok"
+    },
+    {
+      "symbol": "AADI",
+      "avg_volume": 16886700,
+      "status": "ok"
+    },
+    {
+      "symbol": "RATU",
+      "avg_volume": 11732760,
+      "status": "ok"
+    },
+    {
+      "symbol": "INET",
+      "avg_volume": 255103580,
+      "status": "ok"
+    },
+    {
+      "symbol": "WTON",
+      "avg_volume": 5970500,
+      "status": "ok"
+    },
+    {
+      "symbol": "SSIA",
+      "avg_volume": 20696480,
+      "status": "ok"
+    },
+    {
+      "symbol": "KIJA",
+      "avg_volume": 93277220,
+      "status": "ok"
+    },
+    {
+      "symbol": "ELTY",
+      "avg_volume": 211212120,
+      "status": "ok"
+    },
+    {
+      "symbol": "BEST",
+      "avg_volume": 6559180,
+      "status": "ok"
+    },
+    {
+      "symbol": "BKSL",
+      "avg_volume": 308572720,
+      "status": "ok"
+    },
+    {
+      "symbol": "NIKL",
+      "avg_volume": 37724860,
+      "status": "ok"
+    },
+    {
+      "symbol": "ZINC",
+      "avg_volume": 0,
+      "status": "ok"
+    },
+    {
+      "symbol": "DKFT",
+      "avg_volume": 10366760,
+      "status": "ok"
+    },
+    {
+      "symbol": "NICL",
+      "avg_volume": 8792440,
+      "status": "ok"
+    },
+    {
+      "symbol": "HRTA",
+      "avg_volume": 18462660,
+      "status": "ok"
+    },
+    {
+      "symbol": "PSAB",
+      "avg_volume": 187192920,
+      "status": "ok"
+    },
+    {
+      "symbol": "GEMS",
+      "avg_volume": 93000,
+      "status": "ok"
+    },
+    {
+      "symbol": "SRTG",
+      "avg_volume": 5475760,
+      "status": "ok"
+    },
+    {
+      "symbol": "SRAJ",
+      "avg_volume": 77380,
+      "status": "ok"
+    },
+    {
+      "symbol": "MIDI",
+      "avg_volume": 17686700,
+      "status": "ok"
+    },
+    {
+      "symbol": "AMRT",
+      "avg_volume": 96262340,
+      "status": "ok"
+    },
+    {
+      "symbol": "MAPA",
+      "avg_volume": 22362920,
+      "status": "ok"
+    },
+    {
+      "symbol": "FILM",
+      "avg_volume": 7182440,
+      "status": "ok"
+    },
+    {
+      "symbol": "MSIN",
+      "avg_volume": 61478320,
+      "status": "ok"
+    },
+    {
+      "symbol": "BANK",
+      "avg_volume": 6806840,
+      "status": "ok"
+    },
+    {
+      "symbol": "BTPS",
+      "avg_volume": 7638720,
+      "status": "ok"
+    },
+    {
+      "symbol": "MAYA",
+      "avg_volume": 2503840,
+      "status": "ok"
+    },
+    {
+      "symbol": "BNGA",
+      "avg_volume": 8025860,
+      "status": "ok"
+    },
+    {
+      "symbol": "PNBN",
+      "avg_volume": 7007040,
+      "status": "ok"
+    },
+    {
+      "symbol": "BJBR",
+      "avg_volume": 5505920,
+      "status": "ok"
+    },
+    {
+      "symbol": "BJTM",
+      "avg_volume": 15101480,
+      "status": "ok"
+    },
+    {
+      "symbol": "SMIL",
+      "avg_volume": 8785500,
+      "status": "ok"
+    },
+    {
+      "symbol": "VKTR",
+      "avg_volume": 86279140,
+      "status": "ok"
+    },
+    {
+      "symbol": "GGRM",
+      "avg_volume": 1318140,
+      "status": "ok"
+    },
+    {
+      "symbol": "CMRY",
+      "avg_volume": 4038060,
+      "status": "ok"
+    },
+    {
+      "symbol": "CLEO",
+      "avg_volume": 7939320,
+      "status": "ok"
+    },
+    {
+      "symbol": "ULTJ",
+      "avg_volume": 6400500,
+      "status": "ok"
+    },
+    {
+      "symbol": "ROTI",
+      "avg_volume": 2556280,
+      "status": "ok"
+    }
+  ]
+}

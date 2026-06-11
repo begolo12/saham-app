@@ -1,8 +1,14 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import StockCard from './StockCard';
+import SwipeableRow from './SwipeableRow';
 import { searchStocks } from '../api';
+import { LIQUIDITY_THRESHOLD } from '../constants';
 
-export default function StockList({ stocks, loading, onRefresh, onSelectStock, watchlist, onToggleWatchlist, defaultSort = 'default' }) {
+const ROW_HEIGHT = 96; // tinggi satu kartu saham dengan top row + bottom row (px)
+const VIRTUAL_LIST_OFFSET = 360; // header + sort chips + section label + bottom nav (termasuk padding ekstra)
+
+function StockList({ stocks, loading, onSelectStock, watchlist, onToggleWatchlist, defaultSort = 'default' }) {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -10,8 +16,11 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
   const [gridView, setGridView] = useState(false);
   const [liquidOnly, setLiquidOnly] = useState(true);
   const [signalFilter, setSignalFilter] = useState('ALL');
-  const [minPotential, setMinPotential] = useState(50);
+  const [minPotential, setMinPotential] = useState(0);
   const debounceRef = useRef(null);
+
+  // Ref untuk kontainer scroll virtual
+  const scrollRef = useRef(null);
 
   // Reset sort when defaultSort prop changes (tab switch)
   useEffect(() => {
@@ -70,7 +79,7 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
       result = result.filter((s) => (s.signal || s.overall_signal || s.overallSignal) === signalFilter);
     }
     if (liquidOnly) {
-      result = result.filter((s) => Number(s.volume || s.avg_volume || 0) >= 500000);
+      result = result.filter((s) => Number(s.volume || s.avg_volume || 0) >= LIQUIDITY_THRESHOLD);
     }
     if (minPotential > 0) {
       result = result.filter((s) => Number(s.potential_score || 0) >= minPotential);
@@ -98,14 +107,28 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
     return result;
   }, [stocks, search, searchResults, sortBy, signalFilter, liquidOnly, minPotential]);
 
-  const sortChips = [
+  // Virtualizer — hanya aktif di mode daftar (list). Mode grid tidak divirtualisasi
+  // karena mengandalkan CSS Grid multi-kolom yang tidak kompatibel dengan position:absolute.
+  const virtualizer = useVirtualizer({
+    count: gridView ? 0 : filtered.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+    // Dinamis: kalau ada kartu dengan nama panjang (dua baris) atau
+    // data ekstra, virtualizer akan menambah tinggi per item.
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const sortChips = useMemo(() => ([
     { key: 'default', label: 'Semua' },
     { key: 'harga', label: 'Harga' },
     { key: 'perubahan', label: 'Perubahan' },
     { key: 'volume', label: 'Volume' },
     { key: 'potensi', label: 'Potensi' },
     { key: 'sinyal', label: 'Sinyal' },
-  ];
+  ]), []);
+
+  const signalChips = useMemo(() => ['ALL', 'BUY', 'NEUTRAL', 'SELL'], []);
 
   return (
     <div className="stock-list">
@@ -154,7 +177,7 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
       </div>
 
       <div className="sort-chips" style={{ marginTop: 8 }}>
-        {['ALL', 'BUY', 'NEUTRAL', 'SELL'].map((sig) => (
+        {signalChips.map((sig) => (
           <button
             key={sig}
             className={`sort-chip${signalFilter === sig ? ' active' : ''}`}
@@ -211,22 +234,86 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
       ) : (
         <>
           <p className="section-label">{filtered.length} Saham Tercatat</p>
-          <div className={`stock-card-grid ${gridView ? 'grid-view' : 'list-view'}`}>
-            {filtered.map((stock, i) => (
-              <StockCard
-                key={stock.symbol}
-                stock={stock}
-                index={i}
-                onClick={onSelectStock}
-                watchlist={watchlist}
-                onToggleWatchlist={onToggleWatchlist}
-                gridView={gridView}
-              />
-            ))}
-          </div>
+          {gridView ? (
+            // Grid view — render biasa, tidak divirtualisasi
+            <div className="stock-card-grid grid-view">
+              {filtered.map((stock, i) => (
+                <StockCard
+                  key={stock.symbol}
+                  stock={stock}
+                  index={i}
+                  onClick={onSelectStock}
+                  watchlist={watchlist}
+                  onToggleWatchlist={onToggleWatchlist}
+                  gridView={true}
+                />
+              ))}
+            </div>
+          ) : (
+            // List view — virtual scrolling
+            <div
+              ref={scrollRef}
+              className="stock-list-virtual"
+              style={{
+                height: `calc(100vh - ${VIRTUAL_LIST_OFFSET}px)`,
+                overflowY: 'auto',
+                paddingBottom: 24, // ruang ekstra agar card terakhir tidak tertutup bottom nav
+              }}
+            >
+              <div
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const stock = filtered[virtualItem.index];
+                  if (!stock) return null;
+                  const isWatched = watchlist?.includes(stock.symbol);
+                  return (
+                    <div
+                      key={virtualItem.key}
+                      data-index={virtualItem.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
+                    >
+                      <SwipeableRow
+                        rightActive={isWatched}
+                        rightLabel={isWatched ? 'Di Watchlist' : 'Watchlist'}
+                        leftLabel="Hapus"
+                        onSwipeRight={() => {
+                          if (!isWatched) onToggleWatchlist?.(stock.symbol);
+                        }}
+                        onSwipeLeft={() => {
+                          if (isWatched) onToggleWatchlist?.(stock.symbol);
+                        }}
+                      >
+                        <StockCard
+                          stock={stock}
+                          index={virtualItem.index}
+                          onClick={onSelectStock}
+                          watchlist={watchlist}
+                          onToggleWatchlist={onToggleWatchlist}
+                          gridView={false}
+                        />
+                      </SwipeableRow>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
   );
 }
 
+export default memo(StockList);
