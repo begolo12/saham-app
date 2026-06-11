@@ -27,20 +27,24 @@ function fmtPrice(price) {
 }
 
 function countSignal(stocks, type) {
-  return (stocks || []).filter(s => (s.signal || s.overallSignal) === type).length;
+  return (stocks || []).filter(s => {
+    const signal = s.signal || s.overall_signal || s.overallSignal;
+    if (type === 'NEUTRAL') return signal === 'NEUTRAL' || signal === 'HOLD';
+    return signal === type;
+  }).length;
 }
 
 const SEGMENTS = ['Laporan', 'Pasar', 'Sinyal', 'Porto', 'Belajar'];
 
 const FALLBACK_STOCKS = [
   { symbol: 'BBCA', name: 'Bank Central Asia Tbk.', price: 10250, change_percent: 1.25, signal: 'BUY', signal_strength: 78, sector: 'Finance' },
-  { symbol: 'BBRI', name: 'Bank Rakyat Indonesia Tbk.', price: 5650, change_percent: -0.88, signal: 'HOLD', signal_strength: 45, sector: 'Finance' },
+  { symbol: 'BBRI', name: 'Bank Rakyat Indonesia Tbk.', price: 5650, change_percent: -0.88, signal: 'NEUTRAL', signal_strength: 45, sector: 'Finance' },
   { symbol: 'TLKM', name: 'Telkom Indonesia Tbk.', price: 3950, change_percent: 2.15, signal: 'BUY', signal_strength: 82, sector: 'Technology' },
   { symbol: 'ASII', name: 'Astra International Tbk.', price: 5450, change_percent: -1.45, signal: 'SELL', signal_strength: 65, sector: 'Consumer' },
   { symbol: 'ADRO', name: 'Adaro Energy Indonesia Tbk.', price: 2850, change_percent: 3.50, signal: 'BUY', signal_strength: 91, sector: 'Energy' },
   { symbol: 'BMRI', name: 'Bank Mandiri Tbk.', price: 7200, change_percent: 0.75, signal: 'BUY', signal_strength: 72, sector: 'Finance' },
   { symbol: 'GOTO', name: 'GoTo Gojek Tokopedia Tbk.', price: 98, change_percent: -2.00, signal: 'SELL', signal_strength: 55, sector: 'Technology' },
-  { symbol: 'INDF', name: 'Indofood Sukses Makmur Tbk.', price: 6325, change_percent: 0.32, signal: 'HOLD', signal_strength: 40, sector: 'Consumer' },
+  { symbol: 'INDF', name: 'Indofood Sukses Makmur Tbk.', price: 6325, change_percent: 0.32, signal: 'NEUTRAL', signal_strength: 40, sector: 'Consumer' },
 ];
 
 const FALLBACK_SUMMARY = {
@@ -153,7 +157,7 @@ function PortfolioPanel({ portfolio, onSave, onDelete }) {
   </div>;
 }
 
-function ReportPanel({ report, onSelectStock }) {
+function ReportPanel({ report }) {
   const buys = report?.buy_now || [];
   const sells = report?.sell_or_avoid || [];
   return <div style={{ padding: '0 16px 24px' }}>
@@ -167,13 +171,13 @@ function ReportPanel({ report, onSelectStock }) {
       </div>}
     </div>
     <p className="section-label">BUY sekarang — jual target 7 hari</p>
-    {buys.map(s => <div className="signal-card" key={s.symbol} onClick={() => onSelectStock(s)} style={{ marginBottom: 10 }}>
+    {buys.map(s => <div className="signal-card" key={s.symbol} style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}><b style={{ color: '#fff' }}>{s.symbol}</b><SignalBadge signal={s.signal} strength={s.signal_strength} /></div>
       <div style={{ color: '#8E8E93', fontSize: 12, marginTop: 8 }}>{s.trade_plan?.instruction || 'Cek detail untuk rencana.'}</div>
     </div>)}
     {!buys.length && <div className="empty-state"><p className="empty-state-title">Belum ada BUY kuat</p></div>}
     <p className="section-label">SELL / Hindari</p>
-    {sells.map(s => <div className="signal-card" key={s.symbol} onClick={() => onSelectStock(s)} style={{ marginBottom: 10 }}>
+    {sells.map(s => <div className="signal-card" key={s.symbol} style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}><b style={{ color: '#fff' }}>{s.symbol}</b><SignalBadge signal={s.signal} strength={s.signal_strength} /></div>
       <div style={{ color: '#8E8E93', fontSize: 12, marginTop: 8 }}>{s.trade_plan?.instruction || 'Cek detail untuk rencana.'}</div>
     </div>)}
@@ -217,7 +221,7 @@ export default function App() {
   const signalStats = {
     beli: countSignal(allStocks, 'BUY'),
     jual: countSignal(allStocks, 'SELL'),
-    tahan: countSignal(allStocks, 'HOLD'),
+    tahan: countSignal(allStocks, 'NEUTRAL'),
   };
 
   // Fetch top 10 stocks for Market tab — refreshes every 60s
@@ -439,7 +443,7 @@ export default function App() {
             <StockDetail stock={selectedStock} onBack={handleBack} />
           </Suspense>
         ) : tab === 'report' ? (
-          <ReportPanel report={dailyReport} onSelectStock={handleSelectStock} />
+          <ReportPanel report={dailyReport} />
         ) : tab === 'portfolio' ? (
           <PortfolioPanel portfolio={portfolio} onSave={savePositionCb} onDelete={deletePositionCb} />
         ) : tab === 'learning' ? (
