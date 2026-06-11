@@ -1347,7 +1347,7 @@ async def daily_report(user: Dict[str, Any] = Depends(current_user)):
 def _valid_ihsg_price(value) -> bool:
     try:
         v = float(value)
-        return 6500 <= v <= 9500
+        return 4500 <= v <= 9500
     except Exception:
         return False
 
@@ -1365,11 +1365,11 @@ async def market_summary():
     fallback = {
         'name': 'IHSG — Indeks Harga Saham Gabungan',
         'symbol': '^JKSE',
-        'price': 7900.0,
+        'price': None,
         'change': 0,
         'change_percent': 0,
         'high_52w': 9174.474,
-        'low_52w': 6500.0,
+        'low_52w': 4500.0,
         'volume': 0,
         'updated_at': _now_iso(),
         'stale': True,

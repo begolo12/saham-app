@@ -284,10 +284,11 @@ export default function App() {
   }, []);
 
   const watchlistStocks = allStocks.filter(s => watchlist.includes(s.symbol));
+  const summaryStocks = allStocks.length ? allStocks : topStocks;
   const signalStats = {
-    beli: countSignal(allStocks, 'BUY'),
-    jual: countSignal(allStocks, 'SELL'),
-    tahan: countSignal(allStocks, 'NEUTRAL'),
+    beli: countSignal(summaryStocks, 'BUY'),
+    jual: countSignal(summaryStocks, 'SELL'),
+    tahan: countSignal(summaryStocks, 'NEUTRAL'),
   };
 
   // Fetch top 10 stocks for Market tab — semi-live, bounded by backend cache.
@@ -453,6 +454,16 @@ export default function App() {
   }, [pullY, loading, handleRefresh]);
 
   const lastUpdatedStr = lastUpdated ? fmtTime(lastUpdated) : '';
+  const ihsgPrice = Number(marketSummary?.price || 0);
+  const ihsgChangePct = Number(marketSummary?.change_percent || 0);
+  const ihsgIsPositive = ihsgChangePct > 0;
+  const ihsgIsNegative = ihsgChangePct < 0;
+  const ihsgColor = ihsgIsPositive ? '#34C759' : ihsgIsNegative ? '#FF3B30' : '#8E8E93';
+  const ihsgLow = Number(marketSummary?.low_52w || 0);
+  const ihsgHigh = Number(marketSummary?.high_52w || 0);
+  const ihsgRangePct = ihsgHigh > ihsgLow && ihsgPrice > 0
+    ? Math.max(0, Math.min(100, ((ihsgPrice - ihsgLow) / (ihsgHigh - ihsgLow)) * 100))
+    : 50;
 
   // Determine which stocks to pass to StockList based on active tab
   const activeStocks = tab === 'market' ? topStocks
@@ -533,27 +544,23 @@ export default function App() {
                   <div className="market-index">
                     <span className="market-index-name">{marketSummary.name || 'IHSG'}</span>
                     <span className="market-index-price">
-                      {Number(marketSummary.price || 0).toLocaleString('id-ID', { minimumFractionDigits: 2 })}
+                      {ihsgPrice ? ihsgPrice.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'Data tertunda'}
                     </span>
-                    <span className="market-index-change"
-                      style={{ color: (marketSummary.change_percent || 0) >= 0 ? '#34C759' : '#FF3B30' }}
-                    >
-                      {(marketSummary.change_percent || 0) >= 0 ? '+' : ''}
-                      {(marketSummary.change_percent || 0).toFixed(2)}%
+                    <span className="market-index-change" style={{ color: ihsgColor }}>
+                      {ihsgIsPositive ? '+' : ''}{ihsgChangePct.toFixed(2)}%
+                      {marketSummary.stale ? ' · tertunda' : ''}
                     </span>
                   </div>
                   <div className="market-range">
                     <p className="market-range-label">Range 52 Minggu</p>
                     <div className="market-range-bar">
                       <div className="market-range-fill" style={{
-                        width: marketSummary.high_52w && marketSummary.low_52w
-                          ? `${((marketSummary.price - marketSummary.low_52w) / (marketSummary.high_52w - marketSummary.low_52w)) * 100}%`
-                          : '50%'
+                        width: `${ihsgRangePct}%`
                       }} />
                     </div>
                     <div className="market-range-values">
-                      <span>{marketSummary.low_52w?.toLocaleString('id-ID')}</span>
-                      <span>{marketSummary.high_52w?.toLocaleString('id-ID')}</span>
+                      <span>{marketSummary.low_52w?.toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>
+                      <span>{marketSummary.high_52w?.toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>

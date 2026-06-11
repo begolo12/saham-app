@@ -47,3 +47,33 @@
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Mobile spacing and readability fixes */
+.app-main {
+  padding-bottom: calc(var(--tab-bar-height) + 96px) !important;
+}
+.stock-card-grid {
+  padding-bottom: 96px;
+}
+.bottom-segmented-nav {
+  box-shadow: 0 -10px 24px rgba(0,0,0,0.42) !important;
+}
+.market-index-change[style*='142, 142, 147'],
+.market-index-change {
+  font-variant-numeric: tabular-nums;
+}
+.sort-chip,
+.view-toggle-btn,
+.star-btn,
+.logout-btn {
+  min-height: 36px;
+}
+.star-btn {
+  min-width: 36px;
+}
+.stock-name,
+.sector-badge,
+.stock-card-bottom span {
+  color: rgba(235,235,245,0.72) !important;
+}
