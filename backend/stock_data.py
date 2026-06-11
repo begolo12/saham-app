@@ -13,7 +13,7 @@ MIN_VOLUME = 500_000
 MIN_AVG_VALUE = 1_000_000_000  # avg traded value per day (IDR)
 MIN_DAYS = 20
 MAX_FAILED_RATIO = 0.4
-MAX_UNIVERSE = 120
+MAX_UNIVERSE = 260
 
 TOP_STOCK_FALLBACK = [
     {'symbol':'BBCA','name':'Bank Central Asia Tbk.','price':10250,'change_percent':0,'sector':'Perbankan','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':88},
@@ -29,7 +29,7 @@ TOP_STOCK_FALLBACK = [
 ]
 _top_stocks_cache = {'timestamp': 0, 'data': []}
 # score threshold to keep cheap but liquid names like BUMI
-MIN_POTENTIAL_SCORE = 45
+MIN_POTENTIAL_SCORE = 40
 
 # 80+ Indonesian stocks covering all sectors
 INDONESIAN_STOCKS = [
@@ -68,6 +68,13 @@ INDONESIAN_STOCKS = [
     'PNLF.JK', 'BABP.JK', 'AGRO.JK', 'ARTO.JK', 'BFIN.JK',
     'WIFI.JK', 'LINK.JK', 'FREN.JK', 'BULL.JK', 'SMDR.JK',
     'TPIA.JK', 'ESSA.JK', 'AMMN.JK', 'MBMA.JK', 'CUAN.JK',
+    # User-requested and high-volume IDX movers / big cap additions
+    'BREN.JK', 'PTRO.JK', 'CDIA.JK', 'PANI.JK', 'DSSA.JK', 'AADI.JK', 'RATU.JK',
+    'INET.JK', 'WTON.JK', 'SSIA.JK', 'KIJA.JK', 'ELTY.JK', 'BEST.JK', 'BKSL.JK',
+    'NIKL.JK', 'ZINC.JK', 'DKFT.JK', 'NICL.JK', 'HRTA.JK', 'PSAB.JK', 'GEMS.JK',
+    'SRTG.JK', 'SRAJ.JK', 'MIDI.JK', 'AMRT.JK', 'MAPA.JK', 'FILM.JK', 'MSIN.JK',
+    'BANK.JK', 'BTPS.JK', 'MAYA.JK', 'BNGA.JK', 'PNBN.JK', 'BJBR.JK', 'BJTM.JK',
+    'SMIL.JK', 'VKTR.JK', 'GGRM.JK', 'CMRY.JK', 'CLEO.JK', 'ULTJ.JK', 'ROTI.JK',
 ]
 
 SECTOR_MAP = {
@@ -190,6 +197,17 @@ SECTOR_MAP = {
     'AMMN.JK': 'Pertambangan',
     'MBMA.JK': 'Pertambangan',
     'CUAN.JK': 'Energi',
+    'BREN.JK': 'Energi', 'PTRO.JK': 'Energi', 'CDIA.JK': 'Energi', 'PANI.JK': 'Properti',
+    'DSSA.JK': 'Energi', 'AADI.JK': 'Energi', 'RATU.JK': 'Energi', 'INET.JK': 'Teknologi',
+    'WTON.JK': 'Infrastruktur', 'SSIA.JK': 'Properti', 'KIJA.JK': 'Properti', 'ELTY.JK': 'Properti',
+    'BEST.JK': 'Properti', 'BKSL.JK': 'Properti', 'NIKL.JK': 'Basic Materials', 'ZINC.JK': 'Pertambangan',
+    'DKFT.JK': 'Pertambangan', 'NICL.JK': 'Pertambangan', 'HRTA.JK': 'Consumer Goods', 'PSAB.JK': 'Pertambangan',
+    'GEMS.JK': 'Energi', 'SRTG.JK': 'Investasi', 'SRAJ.JK': 'Kesehatan', 'MIDI.JK': 'Consumer Goods',
+    'AMRT.JK': 'Consumer Goods', 'MAPA.JK': 'Consumer Goods', 'FILM.JK': 'Media & Entertainment',
+    'MSIN.JK': 'Media & Entertainment', 'BANK.JK': 'Perbankan', 'BTPS.JK': 'Perbankan', 'MAYA.JK': 'Perbankan',
+    'BNGA.JK': 'Perbankan', 'PNBN.JK': 'Perbankan', 'BJBR.JK': 'Perbankan', 'BJTM.JK': 'Perbankan',
+    'SMIL.JK': 'Infrastruktur', 'VKTR.JK': 'Otomotif', 'GGRM.JK': 'Consumer Goods', 'CMRY.JK': 'Consumer Goods',
+    'CLEO.JK': 'Consumer Goods', 'ULTJ.JK': 'Consumer Goods', 'ROTI.JK': 'Consumer Goods',
 }
 
 
@@ -205,9 +223,15 @@ def _score_stock(price: float, change_percent: float, volume: float, avg_volume:
     if price >= MIN_PRICE:
         score += 5
     if volume >= MIN_VOLUME:
-        score += 20
+        score += 18
+    if volume >= 5_000_000:
+        score += 10
+    if volume >= 20_000_000:
+        score += 12
     if avg_volume and avg_volume >= MIN_VOLUME:
         score += 10
+    if avg_volume and avg_volume >= 5_000_000:
+        score += 8
     if avg_volume and volume and volume >= avg_volume * 0.8:
         score += 8
     if market_cap and market_cap >= 5e12:

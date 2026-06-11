@@ -8,9 +8,9 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
   const [searching, setSearching] = useState(false);
   const [sortBy, setSortBy] = useState(defaultSort);
   const [gridView, setGridView] = useState(false);
-  const [liquidOnly, setLiquidOnly] = useState(false);
+  const [liquidOnly, setLiquidOnly] = useState(true);
   const [signalFilter, setSignalFilter] = useState('ALL');
-  const [minPotential, setMinPotential] = useState(0);
+  const [minPotential, setMinPotential] = useState(50);
   const debounceRef = useRef(null);
 
   // Reset sort when defaultSort prop changes (tab switch)
@@ -116,7 +116,10 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
             type="text"
             placeholder="Cari saham..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setSignalFilter('ALL');
+            }}
             className="search-input"
           />
         </div>
@@ -169,8 +172,8 @@ export default function StockList({ stocks, loading, onRefresh, onSelectStock, w
       </div>
 
       <div className="sort-chips" style={{ marginTop: 8 }}>
-        <button className={`sort-chip${minPotential === 60 ? ' active' : ''}`} onClick={() => setMinPotential(minPotential === 60 ? 0 : 60)}>
-          Potensi ≥60
+        <button className={`sort-chip${minPotential === 50 ? ' active' : ''}`} onClick={() => setMinPotential(minPotential === 50 ? 0 : 50)}>
+          Potensi ≥50
         </button>
       </div>
 

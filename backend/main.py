@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from stock_data import get_top_stocks, get_stock_history, get_stock_info, SECTOR_MAP, INDONESIAN_STOCKS
+from stock_data import get_top_stocks, get_stock_history, get_stock_info, SECTOR_MAP, INDONESIAN_STOCKS, _fetch_stock_card
 from analysis import (
     calc_rsi, calc_macd, calc_sma, calc_bollinger, calc_stochastic,
     analyze_fundamentals,
@@ -505,13 +505,13 @@ async def list_stocks(limit: Optional[int] = None, all: bool = False):
     def _quick_signal(s):
         score = float(s.get('potential_score') or 50)
         change = float(s.get('change_percent') or 0)
-        strength = max(30, min(95, round(score + (8 if change > 1 else -6 if change < -1 else 0))))
-        if strength >= 68 and change >= -3:
+        strength = max(30, min(95, round(score + (10 if change > 1 else -6 if change < -1 else 0))))
+        if strength >= 55 and change >= -3:
             signal = 'BUY'
         elif strength <= 42 or change <= -4:
             signal = 'SELL'
         else:
-            signal = 'HOLD'
+            signal = 'NEUTRAL'
         return signal, strength
 
     results = []
@@ -540,83 +540,75 @@ async def list_stocks(limit: Optional[int] = None, all: bool = False):
 
 @app.get('/api/stocks/search')
 async def search_stocks(q: str):
-    """
-    Search stocks by symbol, name, or sector (case-insensitive, partial match).
-    Returns matching stocks with basic info + signal, sorted by signal strength.
-    """
+    """Search full tracked IDX universe, including tickers not in current top snapshot."""
     if not q or q.strip() == '':
         return {'stocks': [], 'query': q, 'updated_at': _now_iso()}
 
-    q_lower = q.strip().lower()
-
-    # Search across ALL tracked stocks
-    all_stocks = get_top_stocks()
+    q_lower = q.strip().lower().replace('.jk', '')
     updated_at = _now_iso()
 
-    # Filter matching stocks first (cheap), then analyze (expensive)
-    matching = []
-    for s in all_stocks:
-        symbol_lower = s['symbol'].lower()
-        name_lower = s['name'].lower()
-        sector_lower = s['sector'].lower()
-        if q_lower in symbol_lower or q_lower in name_lower or q_lower in sector_lower:
-            matching.append(s)
+    # Start from cached/top data, then add direct universe ticker/name/sector matches.
+    matching_by_symbol = {}
+    for s in get_top_stocks():
+        sym = s['symbol'].replace('.JK', '')
+        if q_lower in sym.lower() or q_lower in (s.get('name') or '').lower() or q_lower in (s.get('sector') or '').lower():
+            matching_by_symbol[sym] = s
 
-    if not matching:
-        return {'stocks': [], 'query': q, 'count': 0, 'updated_at': updated_at}
+    direct_symbols = []
+    for full_symbol in INDONESIAN_STOCKS:
+        sym = full_symbol.replace('.JK', '')
+        sector = SECTOR_MAP.get(full_symbol, 'Lainnya')
+        if q_lower in sym.lower() or q_lower in sector.lower():
+            direct_symbols.append(full_symbol)
 
-    async def _analyze_one(s):
-        try:
-            symbol_full = s['symbol']
-            if not symbol_full.endswith('.JK'):
-                symbol_full = symbol_full + '.JK'
-            df = await _fetch_stock_data_with_retry(get_stock_history, symbol_full, '3mo')
-            info = await _fetch_stock_data_with_retry(get_stock_info, symbol_full)
-
-            tech_signal = {'signal': 'NEUTRAL', 'strength': 50, 'reasons': []}
-            fund_signal = {'signal': 'NEUTRAL', 'strength': 50, 'reasons': []}
-
-            if df is not None and not df.empty:
-                tech_signal = _apply_learning_signal(df, s)
-            if info:
-                fund_signal = generate_fundamental_signal(info)
-
-            overall = combine_signals(tech_signal, fund_signal)
-
-            result = {
-                'symbol': s['symbol'].replace('.JK', ''),
-                'name': s['name'],
-                'price': s['price'],
-                'change_percent': s['change_percent'],
-                'signal': overall['signal'],
-                'signal_strength': overall['strength'],
-                'sector': s['sector'],
-                'volume': s.get('volume', 0),
-                'avg_volume': s.get('avg_volume', 0),
-                'potential_score': s.get('potential_score', 0),
-                'trade_plan': _make_trade_plan(s['symbol'].replace('.JK', ''), float(s.get('price') or 0), overall['signal'], overall['strength']),
-            }
-            _record_recommendation(s, overall)
-            return result
-        except Exception as exc:
-            logger.warning('Search: failed to analyze %s: %s', s['symbol'], exc)
-            return {
-                'symbol': s['symbol'].replace('.JK', ''),
-                'name': s['name'],
-                'price': s['price'],
-                'change_percent': s['change_percent'],
-                'signal': 'NEUTRAL',
-                'signal_strength': 50,
-                'sector': s['sector'],
+    # Direct fetch makes CUAN/BREN/PTRO searchable even when not in top list.
+    for full_symbol in direct_symbols[:20]:
+        sym = full_symbol.replace('.JK', '')
+        if sym in matching_by_symbol:
+            continue
+        card = _fetch_stock_card(full_symbol)
+        if card:
+            matching_by_symbol[sym] = card
+        else:
+            matching_by_symbol[sym] = {
+                'symbol': sym,
+                'name': sym,
+                'price': 0,
+                'change_percent': 0,
+                'sector': SECTOR_MAP.get(full_symbol, 'Lainnya'),
+                'volume': 0,
+                'avg_volume': 0,
+                'avg_value': 0,
+                'potential_score': 0,
             }
 
-    tasks = [_analyze_one(s) for s in matching]
-    outcomes = await asyncio.gather(*tasks)
-    results = [r for r in outcomes if r is not None]
+    def _quick_result(s):
+        score = float(s.get('potential_score') or 0)
+        change = float(s.get('change_percent') or 0)
+        strength = max(30, min(95, round(score + (10 if change > 1 else -6 if change < -1 else 0))))
+        if strength >= 55 and change >= -3:
+            signal = 'BUY'
+        elif strength <= 42 or change <= -4:
+            signal = 'SELL'
+        else:
+            signal = 'NEUTRAL'
+        symbol = s['symbol'].replace('.JK', '')
+        return {
+            'symbol': symbol,
+            'name': s.get('name') or symbol,
+            'price': s.get('price'),
+            'change_percent': s.get('change_percent', 0),
+            'signal': signal,
+            'signal_strength': strength,
+            'sector': s.get('sector', 'Lainnya'),
+            'volume': s.get('volume', 0),
+            'avg_volume': s.get('avg_volume', 0),
+            'potential_score': s.get('potential_score', 0),
+            'trade_plan': _make_trade_plan(symbol, float(s.get('price') or 0), signal, strength),
+        }
 
-    # Sort by signal strength descending
-    results.sort(key=lambda x: x.get('signal_strength', 0), reverse=True)
-
+    results = [_quick_result(s) for s in matching_by_symbol.values()]
+    results.sort(key=lambda x: (x.get('signal_strength', 0), x.get('volume', 0)), reverse=True)
     return {'stocks': results, 'query': q, 'count': len(results), 'updated_at': updated_at}
 
 
