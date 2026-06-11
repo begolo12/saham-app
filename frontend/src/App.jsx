@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import StockList from './components/StockList';
 import SignalBadge from './components/SignalBadge';
-import { fetchTopStocks, fetchAllStocks, fetchMarketSummary, fetchLearningSummary, evaluateLearning, fetchPortfolio, savePortfolioPosition, deletePortfolioPosition, fetchDailyReport } from './api';
+import { fetchTopStocks, fetchAllStocks, fetchMarketSummary, fetchLearningSummary, evaluateLearning, fetchPortfolio, savePortfolioPosition, deletePortfolioPosition, fetchDailyReport, login, fetchMe, fetchUsers, createUser } from './api';
 
 const StockDetail = lazy(() => import('./components/StockDetail'));
 
@@ -157,6 +157,70 @@ function PortfolioPanel({ portfolio, onSave, onDelete }) {
   </div>;
 }
 
+
+function LoginPage({ onLogin }) {
+  const [form, setForm] = useState({ username: 'admin', password: 'admin123' });
+  const [error, setError] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const data = await login(form.username, form.password);
+      localStorage.setItem('saham_auth_token', data.token);
+      onLogin(data.user);
+    } catch {
+      setError('Login gagal. Cek username/password.');
+    }
+  };
+  return <div className="login-page">
+    <form className="login-card" onSubmit={submit}>
+      <div className="app-title-wrap" style={{ justifyContent: 'center', marginBottom: 8 }}><h1 className="app-title">Saham ID</h1><span className="live-dot" /></div>
+      <p className="login-subtitle">Masuk untuk sinkron portfolio per user.</p>
+      <input placeholder="Username" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
+      <input placeholder="Password" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+      {error && <p className="login-error">{error}</p>}
+      <button>Masuk</button>
+      <p className="login-help">Masuk pakai akun admin yang diset di server.</p>
+    </form>
+  </div>;
+}
+
+function AdminUsersPanel({ authUser }) {
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ username: '', password: '', role: 'user' });
+  const [msg, setMsg] = useState('');
+  const load = useCallback(async () => {
+    if (authUser?.role !== 'superadmin') return;
+    const data = await fetchUsers();
+    setUsers(data.users || []);
+  }, [authUser]);
+  useEffect(() => { load().catch(() => {}); }, [load]);
+  if (authUser?.role !== 'superadmin') return null;
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg('');
+    try {
+      const data = await createUser(form);
+      setUsers(data.users || []);
+      setForm({ username: '', password: '', role: 'user' });
+      setMsg('User dibuat.');
+    } catch { setMsg('Gagal buat user.'); }
+  };
+  return <div className="market-summary" style={{ margin: '0 16px 12px' }}>
+    <div className="market-summary-header"><h3>Admin User</h3><span style={{ color: '#8E8E93', fontSize: 11 }}>Super admin</span></div>
+    <form className="portfolio-form" onSubmit={submit}>
+      <input placeholder="Username" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
+      <input placeholder="Password" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+      <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}><option value="user">user</option><option value="superadmin">superadmin</option></select>
+      <button>Tambah</button>
+    </form>
+    {msg && <p style={{ color: '#8E8E93', fontSize: 12 }}>{msg}</p>}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+      {users.map(u => <div className="signal-card" key={u.id}><b style={{ color: '#fff' }}>{u.username}</b><span style={{ color: '#8E8E93', fontSize: 12, marginLeft: 8 }}>{u.role}</span></div>)}
+    </div>
+  </div>;
+}
+
 function ReportPanel({ report }) {
   const buys = report?.buy_now || [];
   const sells = report?.sell_or_avoid || [];
@@ -201,6 +265,8 @@ export default function App() {
   const [learningLoading, setLearningLoading] = useState(false);
   const [portfolio, setPortfolio] = useState(null);
   const [dailyReport, setDailyReport] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const touchStartY = useRef(0);
   const scrollRef = useRef(0);
@@ -224,7 +290,7 @@ export default function App() {
     tahan: countSignal(allStocks, 'NEUTRAL'),
   };
 
-  // Fetch top 10 stocks for Market tab — refreshes every 60s
+  // Fetch top 10 stocks for Market tab — semi-live, bounded by backend cache.
   const fetchTopStocksCb = useCallback(async () => {
     setLoading(true);
     try {
@@ -301,6 +367,10 @@ export default function App() {
     fetchDailyReportCb();
   }, [fetchDailyReportCb]);
 
+  useEffect(() => {
+    fetchMe().then(d => setAuthUser(d.user)).catch(() => localStorage.removeItem('saham_auth_token')).finally(() => setAuthChecked(true));
+  }, []);
+
   // Initial fetch: keep first paint fast. Heavy report/learning loads only when tab opened.
   useEffect(() => {
     fetchTopStocksCb();
@@ -316,13 +386,14 @@ export default function App() {
     };
   }, [fetchTopStocksCb, fetchAllStocksCb, fetchMarketSummaryCb, fetchPortfolioCb]);
 
-  // Market tab refresh every 60s (top stocks + market summary)
+  // Semi-live refresh: market summary every 15s, stock cards every 30s.
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchTopStocksCb();
-      fetchMarketSummaryCb();
-    }, 60000);
-    return () => clearInterval(interval);
+    const marketInterval = setInterval(fetchMarketSummaryCb, 15000);
+    const stockInterval = setInterval(fetchTopStocksCb, 30000);
+    return () => {
+      clearInterval(marketInterval);
+      clearInterval(stockInterval);
+    };
   }, [fetchTopStocksCb, fetchMarketSummaryCb]);
 
   const handleRefresh = useCallback(() => {
@@ -399,6 +470,9 @@ export default function App() {
   // Default sort for signal tab
   const defaultSort = tab === 'signal' ? 'sinyal' : 'default';
 
+  if (!authChecked) return <div className="login-page"><div className="login-card"><p className="login-subtitle">Memeriksa sesi...</p></div></div>;
+  if (!authUser) return <LoginPage onLogin={setAuthUser} />;
+
   return (
     <div className="app"
       onTouchStart={handleTouchStart}
@@ -412,24 +486,13 @@ export default function App() {
           <span className="live-dot" />
         </div>
         <div className="header-right">
+          <span className="last-updated">{authUser.username}</span>
           {lastUpdatedStr && (
             <span className="last-updated">Diperbarui: {lastUpdatedStr}</span>
           )}
+          <button className="logout-btn" onClick={() => { localStorage.removeItem('saham_auth_token'); setAuthUser(null); }}>Keluar</button>
         </div>
       </header>
-
-      {/* Segmented Control */}
-      <div className="segmented-control">
-        {SEGMENTS.map((label) => (
-          <button
-            key={label}
-            className={`segmented-btn${segmentTab === label ? ' active' : ''}`}
-            onClick={() => handleSegment(label)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
 
       <main className="app-main" ref={mainRef}>
         {pulling && (
@@ -445,7 +508,10 @@ export default function App() {
         ) : tab === 'report' ? (
           <ReportPanel report={dailyReport} />
         ) : tab === 'portfolio' ? (
-          <PortfolioPanel portfolio={portfolio} onSave={savePositionCb} onDelete={deletePositionCb} />
+          <>
+            <AdminUsersPanel authUser={authUser} />
+            <PortfolioPanel portfolio={portfolio} onSave={savePositionCb} onDelete={deletePositionCb} />
+          </>
         ) : tab === 'learning' ? (
           <LearningPanel summary={learningSummary} loading={learningLoading} onEvaluate={handleEvaluateLearning} />
         ) : tab === 'market' || tab === 'signal' || tab === 'watchlist' ? (
@@ -589,6 +655,23 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {!showDetail && (
+        <nav className="bottom-segmented-nav" aria-label="Navigasi utama">
+          {SEGMENTS.map((label) => (
+            <button
+              key={label}
+              className={`bottom-segmented-btn${segmentTab === label ? ' active' : ''}`}
+              onClick={() => handleSegment(label)}
+            >
+              <span className="bottom-segmented-icon">
+                {label === 'Laporan' ? '📋' : label === 'Pasar' ? '📈' : label === 'Sinyal' ? '⚡' : label === 'Porto' ? '💼' : '🧠'}
+              </span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
 
     </div>
   );

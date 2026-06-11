@@ -294,7 +294,8 @@ def get_top_stocks() -> List[Dict[str, Any]]:
     """Fast parallel IDX scanner with stale cache and safe fallback."""
     now = time.time()
     cached = _top_stocks_cache.get('data') or []
-    if cached and (now - _top_stocks_cache.get('timestamp', 0)) < 300:
+    # Semi-live desktop mode: short cache keeps UI fresh without hammering yfinance.
+    if cached and (now - _top_stocks_cache.get('timestamp', 0)) < 30:
         return cached
 
     results = []

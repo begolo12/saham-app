@@ -1,4 +1,11 @@
-const BASE_URL = '/api';
+const isElectronLocal = window.location.protocol === 'file:'
+  || (window.location.hostname === '127.0.0.1' && window.location.port === '4179');
+const BASE_URL = isElectronLocal ? 'http://127.0.0.1:8774/api' : '/api';
+
+function authHeaders(extra = {}) {
+  const token = localStorage.getItem('saham_auth_token');
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
 
 async function fetchJson(url, options = {}, timeoutMs = 12000) {
   const controller = new AbortController();
@@ -13,6 +20,30 @@ async function fetchJson(url, options = {}, timeoutMs = 12000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function login(username, password) {
+  return fetchJson(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  }, 8000);
+}
+
+export async function fetchMe() {
+  return fetchJson(`${BASE_URL}/auth/me`, { headers: authHeaders() }, 8000);
+}
+
+export async function fetchUsers() {
+  return fetchJson(`${BASE_URL}/admin/users`, { headers: authHeaders() }, 8000);
+}
+
+export async function createUser(user) {
+  return fetchJson(`${BASE_URL}/admin/users`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(user),
+  }, 8000);
 }
 
 export async function fetchStocks(all = false) {
@@ -66,21 +97,21 @@ export async function evaluateLearning(limit = 50) {
 }
 
 export async function fetchPortfolio() {
-  return fetchJson(`${BASE_URL}/portfolio`, {}, 12000);
+  return fetchJson(`${BASE_URL}/portfolio`, { headers: authHeaders() }, 12000);
 }
 
 export async function savePortfolioPosition(position) {
   return fetchJson(`${BASE_URL}/portfolio`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(position),
   }, 12000);
 }
 
 export async function deletePortfolioPosition(symbol) {
-  return fetchJson(`${BASE_URL}/portfolio/${encodeURIComponent(symbol)}`, { method: 'DELETE' }, 12000);
+  return fetchJson(`${BASE_URL}/portfolio/${encodeURIComponent(symbol)}`, { method: 'DELETE', headers: authHeaders() }, 12000);
 }
 
 export async function fetchDailyReport() {
-  return fetchJson(`${BASE_URL}/report/daily`, {}, 18000);
+  return fetchJson(`${BASE_URL}/report/daily`, { headers: authHeaders() }, 18000);
 }

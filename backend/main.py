@@ -6,13 +6,15 @@ import re
 import sqlite3
 import sys
 import time
+import secrets
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
 import pandas as pd
 import yfinance as yf
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -44,6 +46,8 @@ DATABASE_URL = (
 )
 DATABASE_URL_CLEAN = re.sub(r'(\?.*)', '', DATABASE_URL) if DATABASE_URL else ''
 USE_POSTGRES = bool(DATABASE_URL_CLEAN)
+DEFAULT_ADMIN_USERNAME = os.environ.get('SAHAM_ADMIN_USERNAME', 'admin')
+DEFAULT_ADMIN_PASSWORD = os.environ.get('SAHAM_ADMIN_PASSWORD', 'admin123')
 LEARNING_WINDOW_DAYS = 30
 TRADE_HORIZON_DAYS = 7
 STOP_LOSS_PCT = -5.0
@@ -54,6 +58,7 @@ _executor = ThreadPoolExecutor(max_workers=5)
 
 # ── Simple in-memory cache for market-summary ──
 _market_summary_cache = {}  # { 'data': ..., 'timestamp': ... }
+_auth_tokens = {}
 
 # ── FastAPI app ──
 app = FastAPI(
@@ -89,6 +94,11 @@ class _PgConn:
         self.conn.close()
     def execute(self, sql, params=None):
         sql = sql.replace('?', '%s')
+        if params is None and ';' in sql.strip().rstrip(';'):
+            cur = None
+            for stmt in [x.strip() for x in sql.split(';') if x.strip()]:
+                cur = self.conn.execute(stmt)
+            return cur
         cur = self.conn.execute(sql, params or ())
         return cur
     def commit(self):
@@ -141,9 +151,17 @@ def _init_db():
             CREATE INDEX IF NOT EXISTS idx_signal_rec_created_at ON signal_recommendations(created_at);
             CREATE INDEX IF NOT EXISTS idx_signal_rec_symbol ON signal_recommendations(symbol);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_rec_daily ON signal_recommendations(symbol, recommendation, substr(created_at, 1, 10));
+            CREATE TABLE IF NOT EXISTS app_users (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS virtual_portfolio (
                 id SERIAL PRIMARY KEY,
-                symbol TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                symbol TEXT NOT NULL,
                 qty REAL NOT NULL,
                 avg_price REAL NOT NULL,
                 target_price REAL,
@@ -152,6 +170,9 @@ def _init_db():
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            ALTER TABLE virtual_portfolio ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1;
+            DROP INDEX IF EXISTS idx_virtual_portfolio_symbol;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_virtual_portfolio_user_symbol ON virtual_portfolio(user_id, symbol);
             CREATE INDEX IF NOT EXISTS idx_virtual_portfolio_symbol ON virtual_portfolio(symbol);
             ''')
             return
@@ -180,9 +201,19 @@ def _init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_signal_rec_symbol ON signal_recommendations(symbol)')
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_rec_daily ON signal_recommendations(symbol, recommendation, substr(created_at, 1, 10))')
         conn.execute('''
+        CREATE TABLE IF NOT EXISTS app_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'user',
+            created_at TEXT NOT NULL
+        )
+        ''')
+        conn.execute('''
         CREATE TABLE IF NOT EXISTS virtual_portfolio (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            symbol TEXT NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            symbol TEXT NOT NULL,
             qty REAL NOT NULL,
             avg_price REAL NOT NULL,
             target_price REAL,
@@ -192,6 +223,11 @@ def _init_db():
             updated_at TEXT NOT NULL
         )
         ''')
+        try:
+            conn.execute('ALTER TABLE virtual_portfolio ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1')
+        except Exception:
+            pass
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_virtual_portfolio_user_symbol ON virtual_portfolio(user_id, symbol)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_virtual_portfolio_symbol ON virtual_portfolio(symbol)')
 
 
@@ -292,7 +328,56 @@ def _learning_bias_for_symbol(symbol: str) -> float:
         return 0.0
 
 
+
+def _password_hash(password: str) -> str:
+    return hashlib.sha256(('saham-app:' + password).encode('utf-8')).hexdigest()
+
+
+def _row_to_dict(row):
+    return dict(row) if row is not None else None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = 'user'
+
+
+def _ensure_admin_user():
+    try:
+        with _db_conn() as conn:
+            if not DEFAULT_ADMIN_PASSWORD:
+                return
+            row = conn.execute('SELECT id FROM app_users WHERE username = ?', (DEFAULT_ADMIN_USERNAME,)).fetchone()
+            if not row:
+                conn.execute('INSERT INTO app_users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)', (DEFAULT_ADMIN_USERNAME, _password_hash(DEFAULT_ADMIN_PASSWORD), 'superadmin', datetime.now(timezone.utc).isoformat(timespec='seconds')))
+                conn.commit()
+    except Exception as exc:
+        logger.warning('ensure admin user failed: %s', exc)
+
+
+def current_user(authorization: str = Header(default='')) -> Dict[str, Any]:
+    if not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Login required')
+    token = authorization.replace('Bearer ', '', 1).strip()
+    user = _auth_tokens.get(token)
+    if not user:
+        raise HTTPException(status_code=401, detail='Invalid session')
+    return user
+
+
+def superadmin_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    if user.get('role') != 'superadmin':
+        raise HTTPException(status_code=403, detail='Super admin only')
+    return user
+
 _init_db()
+_ensure_admin_user()
 
 
 def _stock_bias(stock: Dict[str, Any]) -> Dict[str, float]:
@@ -1092,11 +1177,55 @@ async def stock_recommendation_history(symbol: str, limit: int = 20):
     return {'symbol': sym, 'history': [dict(r) for r in rows], 'updated_at': _now_iso()}
 
 
+
+@app.post('/api/auth/login')
+async def login(payload: LoginRequest):
+    user = _get_user_by_credentials(payload.username, payload.password)
+    if not user:
+        raise HTTPException(status_code=401, detail='Username/password salah')
+    token = secrets.token_urlsafe(32)
+    _auth_tokens[token] = user
+    return {'token': token, 'user': {'id': user['id'], 'username': user['username'], 'role': user['role']}}
+
+
+def _get_user_by_credentials(username: str, password: str):
+    with _db_conn() as conn:
+        row = conn.execute('SELECT id, username, role, created_at FROM app_users WHERE username = ? AND password_hash = ?', (username.strip(), _password_hash(password))).fetchone()
+    return _row_to_dict(row)
+
+
+@app.get('/api/auth/me')
+async def me(user: Dict[str, Any] = Depends(current_user)):
+    return {'user': {'id': user['id'], 'username': user['username'], 'role': user['role']}}
+
+
+@app.get('/api/admin/users')
+async def admin_users(_: Dict[str, Any] = Depends(superadmin_user)):
+    with _db_conn() as conn:
+        rows = conn.execute('SELECT id, username, role, created_at FROM app_users ORDER BY id').fetchall()
+    return {'users': [dict(r) for r in rows]}
+
+
+@app.post('/api/admin/users')
+async def admin_create_user(payload: UserCreate, _: Dict[str, Any] = Depends(superadmin_user)):
+    username = payload.username.strip()
+    if not username or not payload.password:
+        raise HTTPException(status_code=400, detail='Username dan password wajib')
+    role = payload.role if payload.role in ('user', 'superadmin') else 'user'
+    try:
+        with _db_conn() as conn:
+            conn.execute('INSERT INTO app_users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)', (username, _password_hash(payload.password), role, _now_iso()))
+            conn.commit()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'User gagal dibuat: {exc}')
+    return await admin_users(_)
+
+
 @app.get('/api/portfolio')
-async def portfolio_summary():
+async def portfolio_summary(user: Dict[str, Any] = Depends(current_user)):
     stocks = {s['symbol'].replace('.JK', '').upper(): s for s in get_top_stocks()}
     with _db_conn() as conn:
-        rows = conn.execute('SELECT * FROM virtual_portfolio ORDER BY symbol').fetchall()
+        rows = conn.execute('SELECT * FROM virtual_portfolio WHERE user_id = ? ORDER BY symbol', (user['id'],)).fetchall()
     positions = []
     total_cost = 0.0
     total_value = 0.0
@@ -1137,37 +1266,37 @@ async def portfolio_summary():
 
 
 @app.post('/api/portfolio')
-async def portfolio_upsert(pos: PortfolioPosition):
+async def portfolio_upsert(pos: PortfolioPosition, user: Dict[str, Any] = Depends(current_user)):
     sym = pos.symbol.upper().replace('.JK', '')
     now = _now_iso()
     with _db_conn() as conn:
-        existing = conn.execute('SELECT id FROM virtual_portfolio WHERE symbol = ?', (sym,)).fetchone()
+        existing = conn.execute('SELECT id FROM virtual_portfolio WHERE user_id = ? AND symbol = ?', (user['id'], sym)).fetchone()
         if existing:
-            conn.execute('UPDATE virtual_portfolio SET qty=?, avg_price=?, target_price=?, stop_loss=?, notes=?, updated_at=? WHERE symbol=?',
-                         (pos.qty, pos.avg_price, pos.target_price, pos.stop_loss, pos.notes, now, sym))
+            conn.execute('UPDATE virtual_portfolio SET qty=?, avg_price=?, target_price=?, stop_loss=?, notes=?, updated_at=? WHERE user_id=? AND symbol=?',
+                         (pos.qty, pos.avg_price, pos.target_price, pos.stop_loss, pos.notes, now, user['id'], sym))
         else:
-            conn.execute('INSERT INTO virtual_portfolio (symbol, qty, avg_price, target_price, stop_loss, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                         (sym, pos.qty, pos.avg_price, pos.target_price, pos.stop_loss, pos.notes, now, now))
+            conn.execute('INSERT INTO virtual_portfolio (user_id, symbol, qty, avg_price, target_price, stop_loss, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                         (user['id'], sym, pos.qty, pos.avg_price, pos.target_price, pos.stop_loss, pos.notes, now, now))
         conn.commit()
-    return await portfolio_summary()
+    return await portfolio_summary(user)
 
 
 @app.delete('/api/portfolio/{symbol}')
-async def portfolio_delete(symbol: str):
+async def portfolio_delete(symbol: str, user: Dict[str, Any] = Depends(current_user)):
     sym = symbol.upper().replace('.JK', '')
     with _db_conn() as conn:
-        conn.execute('DELETE FROM virtual_portfolio WHERE symbol = ?', (sym,))
+        conn.execute('DELETE FROM virtual_portfolio WHERE user_id = ? AND symbol = ?', (user['id'], sym))
         conn.commit()
-    return await portfolio_summary()
+    return await portfolio_summary(user)
 
 
 @app.get('/api/report/daily')
-async def daily_report():
+async def daily_report(user: Dict[str, Any] = Depends(current_user)):
     stocks_resp = await list_stocks(limit=20, all=True)
     stocks = stocks_resp.get('stocks', [])
     buys = [s for s in stocks if s.get('signal') == 'BUY'][:5]
     sells = [s for s in stocks if s.get('signal') == 'SELL'][:5]
-    portfolio = await portfolio_summary()
+    portfolio = await portfolio_summary(user)
     return {
         'headline': 'Laporan harian siap: lihat BUY kuat, SELL/hindari, dan posisi porto.',
         'buy_now': buys,
@@ -1181,11 +1310,11 @@ async def daily_report():
 @app.get('/api/market-summary')
 async def market_summary():
     """
-    Return IHSG index data (^JKSE). Cached for 60s.
+    Return IHSG index data (^JKSE). Cached for 15s.
     """
     now = time.time()
     cached = _market_summary_cache.get('data')
-    if cached and (now - cached['timestamp']) < 60:
+    if cached and (now - cached['timestamp']) < 15:
         return cached['data']
 
     fallback = {
@@ -1206,19 +1335,26 @@ async def market_summary():
             info = ihsg.fast_info or {}
         except Exception:
             info = {}
+        # Google Finance shows intraday movement versus today's open.
+        # Daily yfinance previous close can show positive gap (+0.74%) while
+        # intraday chart is red (-1.90%). Prefer 1D intraday for user-facing IHSG.
+        intraday = ihsg.history(period='1d', interval='1m', timeout=6)
         history = ihsg.history(period='5d', timeout=6)
     except Exception as e:
         logger.warning('market_summary fallback: %s', e)
         _market_summary_cache['data'] = {'data': fallback, 'timestamp': now}
         return fallback
 
-    current_price = info.get('last_price') or info.get('regular_market_price')
-    if current_price is None and not history.empty:
-        current_price = float(history['Close'].iloc[-1])
-
-    prev_close = info.get('previous_close')
-    if prev_close is None and len(history) >= 2:
-        prev_close = float(history['Close'].iloc[-2])
+    if not intraday.empty:
+        current_price = float(intraday['Close'].iloc[-1])
+        prev_close = float(intraday['Open'].iloc[0])
+    else:
+        current_price = info.get('last_price') or info.get('regular_market_price')
+        if current_price is None and not history.empty:
+            current_price = float(history['Close'].iloc[-1])
+        prev_close = info.get('previous_close')
+        if prev_close is None and len(history) >= 2:
+            prev_close = float(history['Close'].iloc[-2])
 
     change = 0.0
     change_percent = 0.0

@@ -1,5 +1,5 @@
-const CACHE = 'saham-id-v1';
-const CORE = ['/', '/manifest.json'];
+const CACHE = 'saham-id-v2';
+const CORE = ['/', '/manifest.json', '/sw.js'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)));
@@ -20,11 +20,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(req).catch(() => new Response(JSON.stringify({ error: 'offline' }), { headers: { 'Content-Type': 'application/json' }, status: 503 })));
     return;
   }
+  if (req.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(fetch(req).catch(() => caches.match('/')));
+    return;
+  }
   event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+    fetch(req).then((res) => {
       const clone = res.clone();
       caches.open(CACHE).then((cache) => cache.put(req, clone));
       return res;
-    }).catch(() => caches.match('/')))
+    }).catch(() => caches.match(req).then((cached) => cached || caches.match('/')))
   );
 });
