@@ -1,0 +1,47 @@
+/* Layout hardening after browser QA */
+html, body, #root {
+  width: 100%;
+  min-height: 100%;
+  background: #080b18;
+}
+
+body { margin: 0; }
+
+.app {
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+  overflow-x: hidden;
+  padding-bottom: 32px;
+}
+
+.app-main,
+.stock-list,
+.skeleton-list,
+.report-page,
+.portfolio-page,
+.learning-page,
+.stock-detail {
+  padding-bottom: 42px !important;
+}
+
+.market-summary-body { gap: 14px; }
+.market-range-values { gap: 12px; }
+
+.stock-card,
+.skeleton-card { margin-inline: 16px; }
+.stock-card:last-child,
+.skeleton-card:last-child { margin-bottom: 36px !important; }
+
+@media (max-width: 560px) {
+  .app { max-width: none; }
+  .market-summary-body {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .market-range {
+    width: 100%;
+    text-align: left;
+  }
+  .market-range-bar { width: 100%; }
+}

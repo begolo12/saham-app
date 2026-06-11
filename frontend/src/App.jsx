@@ -586,33 +586,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Frosted Glass Tab Bar */}
-      <nav className="tab-bar">
-        <button
-          className={`tab-item${tab === 'report' ? ' active' : ''}`}
-          onClick={() => { handleTabChange('report'); fetchDailyReportCb(); }}
-          style={{ color: tab === 'report' ? '#007AFF' : '#8E8E93' }}
-        >
-          <span className="tab-icon">📋</span>
-          <span className="tab-label">Laporan</span>
-        </button>
-        <button
-          className={`tab-item${tab === 'detail' && selectedStock ? ' active' : ''}`}
-          onClick={() => { if (selectedStock) setTab('detail'); }}
-          style={{ color: (tab === 'detail' && selectedStock) ? '#007AFF' : '#8E8E93' }}
-        >
-          <span className="tab-icon">📊</span>
-          <span className="tab-label">Detail</span>
-        </button>
-        <button
-          className={`tab-item${tab === 'watchlist' ? ' active' : ''}`}
-          onClick={() => { handleTabChange('watchlist'); }}
-          style={{ color: tab === 'watchlist' ? '#007AFF' : '#8E8E93' }}
-        >
-          <span className="tab-icon">★</span>
-          <span className="tab-label">Watchlist</span>
-        </button>
-      </nav>
     </div>
   );
 }
