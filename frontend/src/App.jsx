@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import StockList from './components/StockList';
 import SignalBadge from './components/SignalBadge';
-import { fetchTopStocks, fetchAllStocks, fetchMarketSummary, fetchLearningSummary, evaluateLearning, fetchPortfolio, savePortfolioPosition, deletePortfolioPosition, fetchDailyReport, login, fetchMe, fetchUsers, createUser } from './api';
+import { fetchTopStocks, fetchAllStocks, fetchMarketSummary, fetchLearningSummary, evaluateLearning, fetchPortfolio, savePortfolioPosition, deletePortfolioPosition, fetchDailyReport, login, fetchMe, fetchUsers, createUser, fetchNews } from './api';
 
 const StockDetail = lazy(() => import('./components/StockDetail'));
 
@@ -34,7 +34,7 @@ function countSignal(stocks, type) {
   }).length;
 }
 
-const SEGMENTS = ['Laporan', 'Pasar', 'Sinyal', 'Porto', 'Belajar'];
+const SEGMENTS = ['Laporan', 'Pasar', 'Sinyal', 'Berita', 'Porto', 'Belajar'];
 
 const FALLBACK_STOCKS = [
   { symbol: 'BBCA', name: 'Bank Central Asia Tbk.', price: 10250, change_percent: 1.25, signal: 'BUY', signal_strength: 78, sector: 'Finance' },
@@ -116,6 +116,50 @@ function LearningPanel({ summary, loading, onEvaluate }) {
       </div>
     </div>
   );
+}
+
+
+function NewsPanel({ news, loading, stocks, onLoadSymbol, onOpenStock }) {
+  const [query, setQuery] = useState('');
+  const suggestions = (stocks || [])
+    .filter(s => query && (s.symbol || '').toUpperCase().includes(query.toUpperCase()))
+    .slice(0, 8);
+  const groups = news?.items || [];
+  const singleItems = news?.symbol ? [news] : groups;
+  const sentimentColor = (sentiment) => sentiment === 'POSITIVE' ? '#34C759' : sentiment === 'NEGATIVE' ? '#FF3B30' : '#8E8E93';
+  const label = (sentiment) => sentiment === 'POSITIVE' ? 'Positif → tambah bobot BUY' : sentiment === 'NEGATIVE' ? 'Negatif → tambah bobot SELL' : 'Netral';
+  return <div style={{ padding: '0 16px 24px' }}>
+    <div className="market-summary" style={{ margin: '0 0 12px 0' }}>
+      <div className="market-summary-header"><h3>Berita & Sentimen</h3><span style={{ color: '#8E8E93', fontSize: 11 }}>Google News RSS</span></div>
+      <p style={{ color: '#EBEBF5', fontSize: 13, lineHeight: 1.45 }}>Berita positif jadi pertimbangan tambahan BUY. Berita negatif jadi pertimbangan SELL / hindari.</p>
+      <div className="news-search-row">
+        <input placeholder="Cari kode saham: BBCA, BBRI..." value={query} onChange={e => setQuery(e.target.value.toUpperCase())} />
+        <button onClick={() => query && onLoadSymbol(query)}>Cari</button>
+      </div>
+      {suggestions.length > 0 && <div className="news-suggestions">{suggestions.map(st => <button key={st.symbol} onClick={() => { setQuery(st.symbol); onLoadSymbol(st.symbol); }}>{st.symbol}<span>{st.name}</span></button>)}</div>}
+    </div>
+    {loading && <div className="empty-state"><p className="empty-state-title">Memuat berita...</p></div>}
+    {!loading && singleItems.map(group => (
+      <div className="market-summary news-group" key={group.symbol || Math.random()} style={{ margin: '0 0 12px 0' }}>
+        <div className="market-summary-header">
+          <h3>{group.symbol || 'Market'}</h3>
+          <span style={{ color: sentimentColor(group.sentiment), fontWeight: 800 }}>{label(group.sentiment)}</span>
+        </div>
+        <p style={{ color: '#8E8E93', fontSize: 12, lineHeight: 1.45 }}>{group.reason}</p>
+        <div className="news-score-row">
+          <span>Skor {group.sentiment_score || 0}</span><span>+{group.positive_count || 0}</span><span>-{group.negative_count || 0}</span><span>Netral {group.neutral_count || 0}</span>
+        </div>
+        <div className="news-list">
+          {(group.items || []).map((item, idx) => <a key={`${item.url}-${idx}`} className="news-card" href={item.url} target="_blank" rel="noreferrer">
+            <div><b>{item.title}</b><p>{item.summary || 'Buka berita untuk detail.'}</p></div>
+            <span style={{ color: sentimentColor(item.sentiment) }}>{item.sentiment}</span>
+          </a>)}
+          {!(group.items || []).length && <p style={{ color: '#8E8E93', fontSize: 13 }}>Belum ada berita relevan.</p>}
+        </div>
+        {group.symbol && <button className="sort-chip active" onClick={() => onOpenStock({ symbol: group.symbol, name: group.symbol })}>Buka Detail {group.symbol}</button>}
+      </div>
+    ))}
+  </div>;
 }
 
 function PortfolioPanel({ portfolio, onSave, onDelete, stocks = [] }) {
@@ -299,6 +343,8 @@ export default function App() {
   const [learningLoading, setLearningLoading] = useState(false);
   const [portfolio, setPortfolio] = useState(null);
   const [dailyReport, setDailyReport] = useState(null);
+  const [newsData, setNewsData] = useState(null);
+  const [newsLoading, setNewsLoading] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [recommendationModalOpen, setRecommendationModalOpen] = useState(false);
@@ -393,6 +439,12 @@ export default function App() {
     try { setDailyReport(await fetchDailyReport()); } catch { setDailyReport(null); }
   }, [authUser]);
 
+  const fetchNewsCb = useCallback(async (symbol = '') => {
+    setNewsLoading(true);
+    try { setNewsData(await fetchNews(symbol, 8)); } catch { setNewsData({ items: [] }); }
+    finally { setNewsLoading(false); }
+  }, []);
+
   const savePositionCb = useCallback(async (pos) => {
     const data = await savePortfolioPosition(pos);
     setPortfolio(data);
@@ -448,6 +500,7 @@ export default function App() {
     else if (label === 'Pasar') { setTab('market'); setSelectedStock(null); }
     else if (label === 'Watchlist') { setTab('watchlist'); setSelectedStock(null); }
     else if (label === 'Sinyal') { setTab('signal'); setSelectedStock(null); if (!allStocks.length) fetchAllStocksCb(); }
+    else if (label === 'Berita') { setTab('news'); setSelectedStock(null); fetchNewsCb(); if (!allStocks.length) fetchAllStocksCb(); }
     else if (label === 'Porto') { setTab('portfolio'); setSelectedStock(null); fetchPortfolioCb(); if (!allStocks.length) fetchAllStocksCb(); }
     else if (label === 'Belajar') { setTab('learning'); setSelectedStock(null); fetchLearningSummaryCb(); }
   };
@@ -459,6 +512,7 @@ export default function App() {
     else if (newTab === 'market') setSegmentTab('Pasar');
     else if (newTab === 'watchlist') setSegmentTab('Watchlist');
     else if (newTab === 'signal') { setSegmentTab('Sinyal'); if (!allStocks.length) fetchAllStocksCb(); }
+    else if (newTab === 'news') { setSegmentTab('Berita'); fetchNewsCb(); if (!allStocks.length) fetchAllStocksCb(); }
     else if (newTab === 'portfolio') { setSegmentTab('Porto'); fetchPortfolioCb(); if (!allStocks.length) fetchAllStocksCb(); }
     else if (newTab === 'learning') { setSegmentTab('Belajar'); fetchLearningSummaryCb(); }
   };
@@ -549,6 +603,8 @@ export default function App() {
           </Suspense>
         ) : tab === 'report' ? (
           <ReportPanel report={dailyReport} />
+        ) : tab === 'news' ? (
+          <NewsPanel news={newsData} loading={newsLoading} stocks={allStocks.length ? allStocks : topStocks} onLoadSymbol={fetchNewsCb} onOpenStock={handleSelectStock} />
         ) : tab === 'portfolio' ? (
           <>
             <AdminUsersPanel authUser={authUser} />
@@ -734,7 +790,7 @@ export default function App() {
               onClick={() => handleSegment(label)}
             >
               <span className="bottom-segmented-icon">
-                {label === 'Laporan' ? '📋' : label === 'Pasar' ? '📈' : label === 'Sinyal' ? '⚡' : label === 'Porto' ? '💼' : '🧠'}
+                {label === 'Laporan' ? '📋' : label === 'Pasar' ? '📈' : label === 'Sinyal' ? '⚡' : label === 'Berita' ? '📰' : label === 'Porto' ? '💼' : '🧠'}
               </span>
               <span>{label}</span>
             </button>

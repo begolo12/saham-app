@@ -6,6 +6,10 @@ import re
 import sqlite3
 import sys
 import time
+import html
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 import secrets
 import hashlib
 import hmac
@@ -62,6 +66,135 @@ _executor = ThreadPoolExecutor(max_workers=5)
 
 # ── Simple in-memory cache for market-summary ──
 _market_summary_cache = {}  # { 'data': ..., 'timestamp': ... }
+_news_cache: Dict[str, Dict[str, Any]] = {}
+
+
+
+# ── News sentiment: lightweight RSS + Indonesian/English lexicon, no external dependency ──
+POSITIVE_NEWS_WORDS = {
+    'naik', 'menguat', 'positif', 'profit', 'laba', 'untung', 'rekor', 'dividen', 'buyback', 'akuisisi',
+    'kontrak', 'ekspansi', 'tumbuh', 'pertumbuhan', 'surplus', 'upgrade', 'outperform', 'bullish',
+    'rebound', 'recovery', 'meningkat', 'tertinggi', 'solid', 'kuat', 'bagus', 'prospek', 'target naik'
+}
+NEGATIVE_NEWS_WORDS = {
+    'turun', 'melemah', 'negatif', 'rugi', 'kerugian', 'anjlok', 'koreksi', 'gugatan', 'denda',
+    'utang', 'default', 'suspensi', 'delisting', 'fraud', 'korupsi', 'bearish', 'downgrade',
+    'underperform', 'tekanan', 'terendah', 'lemah', 'pangkas', 'turun laba', 'loss'
+}
+
+
+def _plain_text(value: str) -> str:
+    return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', value or ''))).strip()
+
+
+def _news_sentiment_score(text: str) -> int:
+    lowered = (text or '').lower()
+    pos = sum(1 for w in POSITIVE_NEWS_WORDS if w in lowered)
+    neg = sum(1 for w in NEGATIVE_NEWS_WORDS if w in lowered)
+    return max(-3, min(3, pos - neg))
+
+
+def _label_news(score: int) -> str:
+    if score > 0:
+        return 'POSITIVE'
+    if score < 0:
+        return 'NEGATIVE'
+    return 'NEUTRAL'
+
+
+def _fetch_news_for_symbol(symbol: str, limit: int = 8) -> Dict[str, Any]:
+    clean_symbol = symbol.upper().replace('.JK', '').strip()
+    cache_key = f'news:{clean_symbol}:{limit}'
+    now = time.time()
+    cached = _news_cache.get(cache_key)
+    if cached and (now - cached['timestamp']) < 1800:
+        return cached['data']
+
+    company = SECTOR_MAP.get(clean_symbol + '.JK', '')
+    query = f'{clean_symbol} saham OR emiten OR IDX'
+    url = 'https://news.google.com/rss/search?' + urllib.parse.urlencode({
+        'q': query,
+        'hl': 'id',
+        'gl': 'ID',
+        'ceid': 'ID:id',
+    })
+    items = []
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 SahamApp/1.0'})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            xml_data = resp.read(350000)
+        root = ET.fromstring(xml_data)
+        for item in root.findall('.//item')[:limit * 2]:
+            title = _plain_text(item.findtext('title') or '')
+            desc = _plain_text(item.findtext('description') or '')
+            link = item.findtext('link') or ''
+            published = item.findtext('pubDate') or ''
+            text = f'{title} {desc}'
+            if clean_symbol.lower() not in text.lower() and 'saham' not in text.lower() and 'emiten' not in text.lower():
+                continue
+            score = _news_sentiment_score(text)
+            items.append({
+                'title': title,
+                'summary': desc[:220],
+                'url': link,
+                'published_at': published,
+                'sentiment': _label_news(score),
+                'sentiment_score': score,
+            })
+            if len(items) >= limit:
+                break
+    except Exception as exc:
+        logger.info('news fetch failed for %s: %s', clean_symbol, exc)
+
+    total_score = sum(int(i.get('sentiment_score') or 0) for i in items)
+    pos = sum(1 for i in items if i.get('sentiment') == 'POSITIVE')
+    neg = sum(1 for i in items if i.get('sentiment') == 'NEGATIVE')
+    if total_score > 1 or pos > neg:
+        overall = 'POSITIVE'
+        reason = 'Berita terbaru cenderung positif, jadi menambah bobot BUY.'
+    elif total_score < -1 or neg > pos:
+        overall = 'NEGATIVE'
+        reason = 'Berita terbaru cenderung negatif, jadi menambah bobot SELL / hindari.'
+    else:
+        overall = 'NEUTRAL'
+        reason = 'Berita belum memberi bias kuat. Sinyal tetap dominan dari teknikal/fundamental.'
+    data = {
+        'symbol': clean_symbol,
+        'sentiment': overall,
+        'sentiment_score': max(-10, min(10, total_score)),
+        'positive_count': pos,
+        'negative_count': neg,
+        'neutral_count': max(0, len(items) - pos - neg),
+        'reason': reason,
+        'items': items,
+        'updated_at': _now_iso(),
+    }
+    _news_cache[cache_key] = {'data': data, 'timestamp': now}
+    return data
+
+
+def _apply_news_bias(signal_obj: Dict[str, Any], news: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not news:
+        return signal_obj
+    score = int(news.get('sentiment_score') or 0)
+    if score == 0:
+        return signal_obj
+    adjusted = dict(signal_obj)
+    adjusted['reasons'] = list(signal_obj.get('reasons', []))
+    delta = max(-8, min(8, score * 2))
+    adjusted['strength'] = max(1, min(100, int(round(float(adjusted.get('strength', 50)) + delta))))
+    if score > 0:
+        adjusted['reasons'].append('Berita positif terdeteksi — menjadi pertimbangan tambahan untuk BUY')
+    else:
+        adjusted['reasons'].append('Berita negatif terdeteksi — menjadi pertimbangan tambahan untuk SELL / hindari')
+    if adjusted['strength'] >= 65 and score > 0:
+        adjusted['signal'] = 'BUY'
+    elif adjusted['strength'] <= 40 and score < 0:
+        adjusted['signal'] = 'SELL'
+    elif 41 <= adjusted['strength'] <= 64:
+        adjusted['signal'] = 'NEUTRAL'
+    return adjusted
+
 
 # ── FastAPI app ──
 app = FastAPI(
@@ -933,6 +1066,26 @@ async def live_summary():
     }
 
 
+@app.get('/api/news')
+async def market_news(symbol: Optional[str] = None, limit: int = 8):
+    """Return news sentiment. If symbol omitted, use top liquid stocks."""
+    limit = max(1, min(20, int(limit or 8)))
+    if symbol:
+        return _fetch_news_for_symbol(symbol, limit)
+    base = get_top_stocks()[:5]
+    results = []
+    for stock in base:
+        sym = stock.get('symbol') or ''
+        if sym:
+            results.append(_fetch_news_for_symbol(sym, min(5, limit)))
+    return {'items': results, 'updated_at': _now_iso()}
+
+
+@app.get('/api/stocks/{symbol}/news')
+async def stock_news(symbol: str, limit: int = 8):
+    return _fetch_news_for_symbol(symbol, max(1, min(20, int(limit or 8))))
+
+
 @app.get('/api/stocks/{symbol}')
 async def stock_detail(symbol: str):
     """
@@ -991,6 +1144,25 @@ async def stock_detail(symbol: str):
 
     # ── Combined signal ──
     overall = combine_signals(tech_signal, fund_signal)
+    # news sentiment: fetch if cached, else background non-blocking. Use short timeout for detail not to stall.
+    news_sentiment = None
+    cache_key_news = f'news:{sym}:6'
+    cached_news = _news_cache.get(cache_key_news)
+    if cached_news and (time.time() - cached_news['timestamp']) < 1800:
+        news_sentiment = cached_news['data']
+        overall = _apply_news_bias(overall, news_sentiment)
+    else:
+        try:
+            ns = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _fetch_news_for_symbol, sym, 6),
+                timeout=5.0
+            )
+            if ns:
+                news_sentiment = ns
+                _news_cache[cache_key_news] = {'data': ns, 'timestamp': time.time()}
+                overall = _apply_news_bias(overall, ns)
+        except (asyncio.TimeoutError, Exception) as _:
+            pass
     volatility_pct = round(float(close.pct_change().tail(20).std() * 100), 2) if len(close) >= 20 else None
     trade_plan = _make_trade_plan(symbol.upper().replace('.JK', ''), latest_close, overall['signal'], overall['strength'], volatility_pct)
     daily_check = _daily_check_from_plan(latest_close, trade_plan)
@@ -1095,6 +1267,7 @@ async def stock_detail(symbol: str):
         'risk_notes': decision['risk_notes'],
         'trade_plan': trade_plan,
         'daily_check': daily_check,
+        'news_sentiment': news_sentiment,
         'volatility_pct': volatility_pct,
         'updated_at': _now_iso(),
     }

@@ -98,6 +98,14 @@ export default function StockDetail({ stock, onBack }) {
         </div>
       )}
 
+      {d.news_sentiment && (
+        <div className="detail-section news-detail-card" style={{ animationDelay: '0.09s' }}>
+          <h3 className="section-title">Sentimen Berita</h3>
+          <p className="decision-summary">{d.news_sentiment.reason}</p>
+          <div className="news-score-row"><span>Skor {d.news_sentiment.sentiment_score}</span><span>Positif {d.news_sentiment.positive_count}</span><span>Negatif {d.news_sentiment.negative_count}</span><span>Netral {d.news_sentiment.neutral_count}</span></div>
+        </div>
+      )}
+
       <div className="detail-section" style={{ animationDelay: '0.1s' }}>
         <h3 className="section-title">Grafik Harga</h3>
         {detail ? <Chart symbol={d.symbol} /> : <div className="chart-placeholder">Grafik dimuat setelah analisis utama siap.</div>}

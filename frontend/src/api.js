@@ -115,3 +115,15 @@ export async function deletePortfolioPosition(symbol) {
 export async function fetchDailyReport() {
   return fetchJson(`${BASE_URL}/report/daily`, { headers: authHeaders() }, 18000);
 }
+
+
+export async function fetchNews(symbol = '', limit = 8) {
+  const params = symbol
+    ? `?symbol=${encodeURIComponent(symbol)}&limit=${encodeURIComponent(limit)}`
+    : `?limit=${encodeURIComponent(limit)}`;
+  return fetchJson(`${BASE_URL}/news${params}`, {}, 15000);
+}
+
+export async function fetchStockNews(symbol, limit = 8) {
+  return fetchJson(`${BASE_URL}/stocks/${encodeURIComponent(symbol)}/news?limit=${encodeURIComponent(limit)}`, {}, 15000);
+}
