@@ -297,15 +297,20 @@ export default function App() {
     fetchDailyReportCb();
   }, [fetchDailyReportCb]);
 
-  // Initial fetch: top + all + summary
+  // Initial fetch: keep first paint fast. Heavy report/learning loads only when tab opened.
   useEffect(() => {
     fetchTopStocksCb();
-    fetchAllStocksCb();
     fetchMarketSummaryCb();
-    fetchLearningSummaryCb();
-    fetchPortfolioCb();
-    fetchDailyReportCb();
-  }, [fetchTopStocksCb, fetchAllStocksCb, fetchMarketSummaryCb, fetchLearningSummaryCb, fetchPortfolioCb, fetchDailyReportCb]);
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 800));
+    const idleId = idle(() => {
+      fetchAllStocksCb();
+      fetchPortfolioCb();
+    });
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idleId);
+      else clearTimeout(idleId);
+    };
+  }, [fetchTopStocksCb, fetchAllStocksCb, fetchMarketSummaryCb, fetchPortfolioCb]);
 
   // Market tab refresh every 60s (top stocks + market summary)
   useEffect(() => {
