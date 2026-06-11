@@ -1383,8 +1383,10 @@ async def market_summary():
         # Google Finance shows intraday movement versus today's open.
         # Daily yfinance previous close can show positive gap (+0.74%) while
         # intraday chart is red (-1.90%). Prefer 1D intraday for user-facing IHSG.
-        intraday = ihsg.history(period='1d', interval='1m', timeout=6)
-        history = ihsg.history(period='5d', timeout=6)
+        intraday = ihsg.history(period='1d', interval='1m', timeout=3)
+        history = pd.DataFrame()
+        if intraday.empty:
+            history = ihsg.history(period='5d', timeout=3)
     except Exception as e:
         logger.warning('market_summary fallback: %s', e)
         _market_summary_cache['data'] = {'data': fallback, 'timestamp': now}
