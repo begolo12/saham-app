@@ -37,6 +37,7 @@ VOLUME_THRESHOLD = 500000  # min daily volume for valid signal
 DB_PATH = os.path.join(os.path.dirname(__file__), 'signals.db')
 DATABASE_URL = (
     os.environ.get('POSTGRES_URL_NON_POOLING')
+    or os.environ.get('DATABASE_URL_UNPOOLED')
     or os.environ.get('DATABASE_URL')
     or os.environ.get('POSTGRES_URL')
     or ''
