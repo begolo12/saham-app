@@ -8,3 +8,5 @@ __pycache__/
 backend/signals.db
 *.db
 .DS_Store
+
+.vercel
