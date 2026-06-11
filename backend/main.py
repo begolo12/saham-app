@@ -8,6 +8,8 @@ import sys
 import time
 import secrets
 import hashlib
+import hmac
+import base64
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -48,6 +50,8 @@ DATABASE_URL_CLEAN = re.sub(r'(\?.*)', '', DATABASE_URL) if DATABASE_URL else ''
 USE_POSTGRES = bool(DATABASE_URL_CLEAN)
 DEFAULT_ADMIN_USERNAME = os.environ.get('SAHAM_ADMIN_USERNAME', 'admin')
 DEFAULT_ADMIN_PASSWORD = os.environ.get('SAHAM_ADMIN_PASSWORD', 'admin123')
+AUTH_SECRET = os.environ.get('SAHAM_AUTH_SECRET') or os.environ.get('SAHAM_ADMIN_PASSWORD') or 'dev-only-secret'
+AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30
 LEARNING_WINDOW_DAYS = 30
 TRADE_HORIZON_DAYS = 7
 STOP_LOSS_PCT = -5.0
@@ -58,7 +62,6 @@ _executor = ThreadPoolExecutor(max_workers=5)
 
 # ── Simple in-memory cache for market-summary ──
 _market_summary_cache = {}  # { 'data': ..., 'timestamp': ... }
-_auth_tokens = {}
 
 # ── FastAPI app ──
 app = FastAPI(
@@ -363,11 +366,44 @@ def _ensure_admin_user():
         logger.warning('ensure admin user failed: %s', exc)
 
 
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode('ascii').rstrip('=')
+
+
+def _sign_token(payload: str) -> str:
+    return _b64url(hmac.new(AUTH_SECRET.encode('utf-8'), payload.encode('utf-8'), hashlib.sha256).digest())
+
+
+def _make_token(user: Dict[str, Any]) -> str:
+    exp = int(time.time()) + AUTH_TOKEN_TTL_SECONDS
+    payload = f"{user['id']}.{exp}"
+    return f"{payload}.{_sign_token(payload)}"
+
+
+def _get_user_by_id(user_id: int):
+    with _db_conn() as conn:
+        row = conn.execute('SELECT id, username, role, created_at FROM app_users WHERE id = ?', (user_id,)).fetchone()
+    return _row_to_dict(row)
+
+
+def _verify_token(token: str):
+    try:
+        user_id_s, exp_s, sig = token.split('.', 2)
+        payload = f"{user_id_s}.{exp_s}"
+        if not hmac.compare_digest(sig, _sign_token(payload)):
+            return None
+        if int(exp_s) < int(time.time()):
+            return None
+        return _get_user_by_id(int(user_id_s))
+    except Exception:
+        return None
+
+
 def current_user(authorization: str = Header(default='')) -> Dict[str, Any]:
     if not authorization.startswith('Bearer '):
         raise HTTPException(status_code=401, detail='Login required')
     token = authorization.replace('Bearer ', '', 1).strip()
-    user = _auth_tokens.get(token)
+    user = _verify_token(token)
     if not user:
         raise HTTPException(status_code=401, detail='Invalid session')
     return user
@@ -1185,8 +1221,7 @@ async def login(payload: LoginRequest):
     user = _get_user_by_credentials(payload.username, payload.password)
     if not user:
         raise HTTPException(status_code=401, detail='Username/password salah')
-    token = secrets.token_urlsafe(32)
-    _auth_tokens[token] = user
+    token = _make_token(user)
     return {'token': token, 'user': {'id': user['id'], 'username': user['username'], 'role': user['role']}}
 
 
@@ -1309,6 +1344,14 @@ async def daily_report(user: Dict[str, Any] = Depends(current_user)):
     }
 
 
+def _valid_ihsg_price(value) -> bool:
+    try:
+        v = float(value)
+        return 6500 <= v <= 9500
+    except Exception:
+        return False
+
+
 @app.get('/api/market-summary')
 async def market_summary():
     """
@@ -1322,11 +1365,11 @@ async def market_summary():
     fallback = {
         'name': 'IHSG — Indeks Harga Saham Gabungan',
         'symbol': '^JKSE',
-        'price': 5789.397,
+        'price': 7900.0,
         'change': 0,
         'change_percent': 0,
         'high_52w': 9174.474,
-        'low_52w': 5317.908,
+        'low_52w': 6500.0,
         'volume': 0,
         'updated_at': _now_iso(),
         'stale': True,
@@ -1347,16 +1390,28 @@ async def market_summary():
         _market_summary_cache['data'] = {'data': fallback, 'timestamp': now}
         return fallback
 
+    current_price = None
+    prev_close = None
     if not intraday.empty:
-        current_price = float(intraday['Close'].iloc[-1])
-        prev_close = float(intraday['Open'].iloc[0])
-    else:
+        closes = intraday['Close'].dropna()
+        opens = intraday['Open'].dropna()
+        if len(closes) and len(opens):
+            current_price = float(closes.iloc[-1])
+            prev_close = float(opens.iloc[0])
+    if not _valid_ihsg_price(current_price):
         current_price = info.get('last_price') or info.get('regular_market_price')
-        if current_price is None and not history.empty:
-            current_price = float(history['Close'].iloc[-1])
+    if not _valid_ihsg_price(current_price) and not history.empty:
+        current_price = float(history['Close'].dropna().iloc[-1])
+    if not _valid_ihsg_price(prev_close):
         prev_close = info.get('previous_close')
-        if prev_close is None and len(history) >= 2:
-            prev_close = float(history['Close'].iloc[-2])
+    if not _valid_ihsg_price(prev_close) and len(history) >= 2:
+        prev_close = float(history['Close'].dropna().iloc[-2])
+    if not _valid_ihsg_price(current_price):
+        last_good = _market_summary_cache.get('last_good')
+        if last_good:
+            return last_good
+        current_price = fallback['price']
+        prev_close = fallback['price']
 
     change = 0.0
     change_percent = 0.0
@@ -1375,6 +1430,8 @@ async def market_summary():
         'volume': info.get('last_volume') or info.get('volume') or 0,
         'updated_at': _now_iso(),
     }
+    if _valid_ihsg_price(result['price']):
+        _market_summary_cache['last_good'] = result
     _market_summary_cache['data'] = {'data': result, 'timestamp': now}
     return result
 

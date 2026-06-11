@@ -48,15 +48,15 @@ export async function createUser(user) {
 
 export async function fetchStocks(all = false) {
   const params = all ? '?all=true' : '';
-  return fetchJson(`${BASE_URL}/stocks${params}`, {}, all ? 18000 : 10000);
+  return fetchJson(`${BASE_URL}/stocks${params}`, {}, all ? 12000 : 6500);
 }
 
 export async function fetchTopStocks() {
-  return fetchJson(`${BASE_URL}/stocks`, {}, 10000);
+  return fetchJson(`${BASE_URL}/stocks`, {}, 6500);
 }
 
 export async function fetchAllStocks() {
-  return fetchJson(`${BASE_URL}/stocks?all=true`, {}, 18000);
+  return fetchJson(`${BASE_URL}/stocks?all=true`, {}, 12000);
 }
 
 export async function searchStocks(q) {
@@ -81,7 +81,7 @@ export async function fetchStockRecommendationHistory(symbol) {
 }
 
 export async function fetchMarketSummary() {
-  return fetchJson(`${BASE_URL}/market-summary`, {}, 8000);
+  return fetchJson(`${BASE_URL}/market-summary`, {}, 5000);
 }
 
 export async function fetchLiveSummary() {

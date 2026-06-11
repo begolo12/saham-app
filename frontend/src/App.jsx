@@ -292,18 +292,18 @@ export default function App() {
 
   // Fetch top 10 stocks for Market tab — semi-live, bounded by backend cache.
   const fetchTopStocksCb = useCallback(async () => {
-    setLoading(true);
+    setLoading(prev => (topStocks.length ? prev : true));
     try {
       const json = await fetchTopStocks();
       setTopStocks(json.data || json.stocks || json || []);
       setLastUpdated(new Date());
     } catch {
-      setTopStocks(FALLBACK_STOCKS);
+      setTopStocks(prev => prev.length ? prev : FALLBACK_STOCKS);
       setLastUpdated(new Date());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [topStocks.length]);
 
   // Fetch ALL stocks for Signal tab — called once on mount
   const fetchAllStocksCb = useCallback(async () => {
@@ -348,12 +348,14 @@ export default function App() {
   }, [fetchLearningSummaryCb]);
 
   const fetchPortfolioCb = useCallback(async () => {
+    if (!authUser) return;
     try { setPortfolio(await fetchPortfolio()); } catch { setPortfolio({ positions: [], summary: {} }); }
-  }, []);
+  }, [authUser]);
 
   const fetchDailyReportCb = useCallback(async () => {
+    if (!authUser) return;
     try { setDailyReport(await fetchDailyReport()); } catch { setDailyReport(null); }
-  }, []);
+  }, [authUser]);
 
   const savePositionCb = useCallback(async (pos) => {
     const data = await savePortfolioPosition(pos);
@@ -375,21 +377,12 @@ export default function App() {
   useEffect(() => {
     fetchTopStocksCb();
     fetchMarketSummaryCb();
-    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 800));
-    const idleId = idle(() => {
-      fetchAllStocksCb();
-      fetchPortfolioCb();
-    });
-    return () => {
-      if (window.cancelIdleCallback) window.cancelIdleCallback(idleId);
-      else clearTimeout(idleId);
-    };
-  }, [fetchTopStocksCb, fetchAllStocksCb, fetchMarketSummaryCb, fetchPortfolioCb]);
+  }, [fetchTopStocksCb, fetchMarketSummaryCb]);
 
   // Semi-live refresh: market summary every 15s, stock cards every 30s.
   useEffect(() => {
-    const marketInterval = setInterval(fetchMarketSummaryCb, 15000);
-    const stockInterval = setInterval(fetchTopStocksCb, 30000);
+    const marketInterval = setInterval(fetchMarketSummaryCb, 30000);
+    const stockInterval = setInterval(fetchTopStocksCb, 60000);
     return () => {
       clearInterval(marketInterval);
       clearInterval(stockInterval);
@@ -418,7 +411,7 @@ export default function App() {
     if (label === 'Laporan') { setTab('report'); setSelectedStock(null); fetchDailyReportCb(); }
     else if (label === 'Pasar') { setTab('market'); setSelectedStock(null); }
     else if (label === 'Watchlist') { setTab('watchlist'); setSelectedStock(null); }
-    else if (label === 'Sinyal') { setTab('signal'); setSelectedStock(null); }
+    else if (label === 'Sinyal') { setTab('signal'); setSelectedStock(null); if (!allStocks.length) fetchAllStocksCb(); }
     else if (label === 'Porto') { setTab('portfolio'); setSelectedStock(null); fetchPortfolioCb(); }
     else if (label === 'Belajar') { setTab('learning'); setSelectedStock(null); fetchLearningSummaryCb(); }
   };
@@ -426,12 +419,12 @@ export default function App() {
   const handleTabChange = (newTab) => {
     setTab(newTab);
     setSelectedStock(null);
-    if (newTab === 'report') setSegmentTab('Laporan');
+    if (newTab === 'report') { setSegmentTab('Laporan'); fetchDailyReportCb(); }
     else if (newTab === 'market') setSegmentTab('Pasar');
     else if (newTab === 'watchlist') setSegmentTab('Watchlist');
-    else if (newTab === 'signal') setSegmentTab('Sinyal');
-    else if (newTab === 'portfolio') setSegmentTab('Porto');
-    else if (newTab === 'learning') setSegmentTab('Belajar');
+    else if (newTab === 'signal') { setSegmentTab('Sinyal'); if (!allStocks.length) fetchAllStocksCb(); }
+    else if (newTab === 'portfolio') { setSegmentTab('Porto'); fetchPortfolioCb(); }
+    else if (newTab === 'learning') { setSegmentTab('Belajar'); fetchLearningSummaryCb(); }
   };
 
   // Pull-to-refresh

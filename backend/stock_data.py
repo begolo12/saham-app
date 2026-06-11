@@ -13,7 +13,7 @@ MIN_VOLUME = 500_000
 MIN_AVG_VALUE = 1_000_000_000  # avg traded value per day (IDR)
 MIN_DAYS = 20
 MAX_FAILED_RATIO = 0.4
-MAX_UNIVERSE = 260
+MAX_UNIVERSE = 80
 
 TOP_STOCK_FALLBACK = [
     {'symbol':'BBCA','name':'Bank Central Asia Tbk.','price':10250,'change_percent':0,'sector':'Perbankan','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':88},
@@ -252,8 +252,8 @@ def _score_stock(price: float, change_percent: float, volume: float, avg_volume:
 def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
     try:
         ticker = yf.Ticker(symbol)
-        history = ticker.history(period='3mo', timeout=8)
-        if history.empty or len(history) < MIN_DAYS:
+        history = ticker.history(period='1mo', timeout=4)
+        if history.empty or len(history) < 5:
             return None
         try:
             info = ticker.fast_info or {}
@@ -295,15 +295,15 @@ def get_top_stocks() -> List[Dict[str, Any]]:
     now = time.time()
     cached = _top_stocks_cache.get('data') or []
     # Semi-live desktop mode: short cache keeps UI fresh without hammering yfinance.
-    if cached and (now - _top_stocks_cache.get('timestamp', 0)) < 30:
+    if cached and (now - _top_stocks_cache.get('timestamp', 0)) < 180:
         return cached
 
     results = []
-    executor = ThreadPoolExecutor(max_workers=12)
+    executor = ThreadPoolExecutor(max_workers=8)
     futures = [executor.submit(_fetch_stock_card, symbol) for symbol in INDONESIAN_STOCKS[:MAX_UNIVERSE]]
     try:
-        deadline = now + 12
-        for fut in as_completed(futures, timeout=13):
+        deadline = now + 5
+        for fut in as_completed(futures, timeout=6):
             if time.time() > deadline:
                 break
             item = fut.result()
