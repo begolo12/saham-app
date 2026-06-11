@@ -1264,5 +1264,9 @@ async def market_summary():
 
 @app.get('/health')
 async def health():
-    return {'status': 'ok', 'service': 'saham-app-api'}
+    return {
+        'status': 'ok',
+        'service': 'saham-app-api',
+        'database': 'postgres' if USE_POSTGRES else 'sqlite',
+    }
 
