@@ -1,8 +1,23 @@
-const CACHE = 'saham-id-v3';
-const STATIC_CACHE = 'saham-id-static-v3';
+/* Service worker — Saham ID PWA
+ *
+ * Strategies:
+ *   /api/market-summary, /api/stocks (top 10) → stale-while-revalidate (instant)
+ *   /api/* (other)                              → network-first (fresh)
+ *   navigations, HTML                           → network-first (offline fallback)
+ *   static assets                               → cache-first (long-lived)
+ *   everything else                             → network-first
+ */
+
+const CACHE = 'saham-id-v4';
+const STATIC_CACHE = 'saham-id-static-v4';
 const CORE = ['/', '/manifest.json'];
 
-// Install: cache core assets
+// Endpoints where stale-while-revalidate gives the biggest perceived-speed win
+const SWR_ENDPOINTS = new Set([
+  '/api/market-summary',
+  '/api/stocks',
+]);
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(CORE))
@@ -10,24 +25,31 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate: clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => k !== CACHE && k !== STATIC_CACHE).map((k) => caches.delete(k))
+        keys
+          .filter((k) => k !== CACHE && k !== STATIC_CACHE)
+          .map((k) => caches.delete(k))
       )
     )
   );
   self.clients.claim();
 });
 
-// Determine strategy based on request type
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+  if (req.method !== 'GET') return; // never cache mutations
   const url = new URL(req.url);
 
-  // API calls — network-first with fallback
+  // Stale-while-revalidate for hot read-only endpoints
+  if (url.pathname === '/api/market-summary' || url.pathname === '/api/stocks') {
+    event.respondWith(staleWhileRevalidate(req, CACHE));
+    return;
+  }
+
+  // Other API calls — network-first with cache fallback
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(networkFirst(req, CACHE));
     return;
@@ -47,7 +69,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (JS, CSS, images, fonts) — cache-first
+  // Static assets — cache-first
   if (
     url.pathname.match(/\.(js|css|mjs|json|woff2?|ttf|otf|svg|png|jpg|jpeg|gif|webp|ico)$/i) ||
     url.pathname.startsWith('/assets/')
@@ -56,11 +78,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else — network-first with cache fallback
   event.respondWith(networkFirst(req, CACHE));
 });
 
-// Cache-first strategy: serve from cache, fall back to network
+/* Cache-first: serve from cache, fall back to network */
 async function cacheFirst(req, cacheName) {
   const cached = await caches.match(req);
   if (cached) return cached;
@@ -76,7 +97,7 @@ async function cacheFirst(req, cacheName) {
   }
 }
 
-// Network-first strategy: try network, fall back to cache
+/* Network-first: try network, fall back to cache */
 async function networkFirst(req, cacheName) {
   try {
     const res = await fetch(req);
@@ -88,7 +109,6 @@ async function networkFirst(req, cacheName) {
   } catch {
     const cached = await caches.match(req);
     if (cached) return cached;
-    // API offline response
     if (req.url.includes('/api/')) {
       return new Response(JSON.stringify({ error: 'offline' }), {
         headers: { 'Content-Type': 'application/json' },
@@ -97,4 +117,26 @@ async function networkFirst(req, cacheName) {
     }
     return caches.match('/');
   }
+}
+
+/* Stale-while-revalidate: serve cached instantly, refresh in background */
+async function staleWhileRevalidate(req, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(req);
+
+  const networkFetch = fetch(req)
+    .then((res) => {
+      if (res && res.ok) {
+        const clone = res.clone();
+        cache.put(req, clone).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => null);
+
+  // Return cached immediately if we have it; otherwise wait for network
+  return cached || (await networkFetch) || new Response(
+    JSON.stringify({ error: 'offline' }),
+    { headers: { 'Content-Type': 'application/json' }, status: 503 }
+  );
 }

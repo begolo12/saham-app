@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import SignalBadge from './SignalBadge';
-import Chart from './Chart';
+import Skeleton from './Skeleton';
 import { fetchStockDetail, fetchStockRecommendationHistory } from '../api';
+
+// recharts is heavy (~150KB gz) — only load when the detail page renders
+const Chart = lazy(() => import('./Chart'));
 
 function fmt(val) {
   if (val === null || val === undefined) return '-';
@@ -113,7 +116,7 @@ export default function StockDetail() {
 
       <div className="detail-section" style={{ animationDelay: '0.1s' }}>
         <h3 className="section-title">Grafik Harga</h3>
-        {detail ? <Chart symbol={d.symbol} /> : <div className="chart-placeholder">Grafik dimuat setelah analisis utama siap.</div>}
+        {detail ? <Suspense fallback={<div className="chart-placeholder">Memuat grafik...</div>}><Chart symbol={d.symbol} /></Suspense> : <div className="chart-placeholder">Grafik dimuat setelah analisis utama siap.</div>}
       </div>
 
       <div className="detail-tabs">

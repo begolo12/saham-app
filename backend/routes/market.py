@@ -3,6 +3,7 @@ import time
 
 import pandas as pd
 import yfinance as yf
+from fastapi import Response
 from app import app
 from services.db import USE_POSTGRES, _now_iso
 from services.stock_service import _market_summary_cache
@@ -19,10 +20,12 @@ def _valid_ihsg_price(value) -> bool:
 
 
 @app.get('/api/market-summary')
-async def market_summary():
+async def market_summary(response: Response):
     """
     Return IHSG index data (^JKSE). Cached for 15s.
     """
+    # Edge cache: serve stale up to 120s while revalidating in background
+    response.headers['Cache-Control'] = 'public, max-age=0, s-maxage=30, stale-while-revalidate=120'
     now = time.time()
     cached = _market_summary_cache.get('data')
     if cached and (now - cached['timestamp']) < 15:

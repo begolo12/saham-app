@@ -170,7 +170,7 @@ function useWatchlist() {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { authUser, authChecked, checkSession, logout } = useAuthStore();
+  const { authUser, checkSession, logout } = useAuthStore();
   const { allStocks, loading, lastUpdated, fetchTopStocks, fetchMarketSummary } = useStocksStore();
   const { resolved, toggle: toggleTheme } = useTheme();
 
@@ -256,9 +256,7 @@ export default function App() {
 
   const pull = usePullToRefresh(handleRefresh, mainRef);
 
-  /* Auth guard */
-  if (!authChecked) return <LoadingScreen />;
-
+  /* Auth gate — synchronous from localStorage, no network wait */
   if (!authUser) {
     return (
       <ErrorBoundary>

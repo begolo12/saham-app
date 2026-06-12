@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 
 import pandas as pd
 import yfinance as yf
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from fastapi import Depends
 
 from app import app
@@ -64,8 +64,11 @@ def _sanitize_stock_dict(d: Dict[str, Any]) -> Dict[str, Any]:
 # ──────────────────────────────────────────────
 
 @app.get('/api/stocks')
-async def list_stocks(limit: Optional[int] = None, all: bool = False):
+async def list_stocks(limit: Optional[int] = None, all: bool = False, response: Response = None):
     """Fast stock list. Heavy detail analysis runs only on detail page."""
+    # Edge cache: short TTL, long SWR — Vercel CDN serves instantly on re-visit
+    if response is not None:
+        response.headers['Cache-Control'] = 'public, max-age=0, s-maxage=30, stale-while-revalidate=120'
     stocks = get_top_stocks()
     updated_at = _now_iso()
 
