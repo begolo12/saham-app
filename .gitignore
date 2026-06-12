@@ -1,12 +1,57 @@
+# Node
 node_modules/
 frontend/node_modules/
 frontend/dist/
+.npm/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Secrets & env files
 .env
+.env.local
+.env.*.local
+.env.production        # contains rotated VERCEL secrets — never commit
+.env.development
+
+# Build output
 .vercel/
+.next/
+out/
+build/
+dist/
+
+# Local DB & state
 backend/signals.db
 *.db
-.DS_Store
+*.db-journal
+*.sqlite
+*.sqlite3
 
-.vercel
+# Generated artifacts (regenerate on demand)
+idx_volume_scan.json
+idx_volume_check_report.*
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -19,7 +19,7 @@ MIN_DAYS = 20
 MAX_FAILED_RATIO = 0.5
 # Default cap; when an external scanner is configured (see SCANNER_URL), this
 # limit is bypassed and we serve whatever the external scanner has.
-MAX_UNIVERSE = int(os.environ.get('SAHAM_MAX_UNIVERSE', 280))
+MAX_UNIVERSE = int(os.environ.get('SAHAM_MAX_UNIVERSE', 951))
 
 # Path to the canonical full-IDX universe (951 tickers, last refresh 2026).
 # Lives in data/idx_universe.txt — one ticker per line, e.g. "BBCA.JK".

@@ -11,3 +11,7 @@ python-multipart>=0.0.9
 # BackgroundWorker on serverless hosts (Vercel) where a real Redis isn't set.
 # Falls back gracefully to no-cache if even fakeredis fails to import.
 fakeredis>=2.20
+
+# Password hashing — required by services/db.py. Without this, the app silently
+# falls back to a static-salt SHA-256, which is brute-forceable on a GPU.
+bcrypt>=4.0

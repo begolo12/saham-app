@@ -35,14 +35,23 @@ import yfinance as yf
 logger = logging.getLogger('saham-api')
 
 # ── Tunables (env-overridable) ──────────────────────────────────────
+# Polling cadence was reduced from 4s/40 batch to 8s/30 batch to keep us
+# under Yahoo Finance's unofficial rate limit (~200 req/min/IP). Combined
+# with a 0-1.5s jitter, we now sit around ~120 req/min — well within the
+# safe zone even with hot+cold+slow lanes combined.
 POLL_IHSG_SECS = float(os.environ.get('TICKER_POLL_IHSG', '2.0'))
-POLL_STOCKS_SECS = float(os.environ.get('TICKER_POLL_STOCKS', '4.0'))
-BATCH_SIZE = int(os.environ.get('TICKER_BATCH', '40'))
+POLL_STOCKS_SECS = float(os.environ.get('TICKER_POLL_STOCKS', '8.0'))
+BATCH_SIZE = int(os.environ.get('TICKER_BATCH', '30'))
+POLL_JITTER_SECS = float(os.environ.get('TICKER_JITTER', '1.5'))
 SUBSCRIBER_QUEUE_MAX = 8
 SLOW_LANE_STRIKES = 4           # consecutive failures before demotion
 SLOW_LANE_RESCAN = 15           # every N cycles, retry stalled tickers
 SLOW_LANE_PROBE_SIZE = 12       # how many stalled to re-check per rescan
 STALE_AFTER_SECS = 15 * 60      # after 15min, mark as "stale"
+# Backoff state — incremented on yfinance errors, reset on a clean cycle.
+_BACKOFF_INITIAL = 5.0          # first back-off sleep in seconds
+_BACKOFF_MAX = 60.0             # cap on exponential back-off
+_BACKOFF_FACTOR = 2.0           # multiplier per consecutive failure
 
 # IHSG sanity bounds — reject obviously bad quotes
 _IHSG_LOW = 4500.0
@@ -307,9 +316,17 @@ class TickerEngine:
           * Poll all HOT_SYMBOLS (so the most-watched cards stay "live")
           * Poll a BATCH_SIZE slice of the universe via the round-robin
             cursor (skipping anything in the slow lane)
+
+        Cadence is ``POLL_STOCKS_SECS`` with ``POLL_JITTER_SECS`` random jitter
+        to avoid the synchronous "thundering herd" pattern. If yfinance
+        raises, we apply exponential back-off and only reset the counter
+        after a clean cycle.
         """
+        import random
         await asyncio.sleep(0.5)
+        backoff = 0.0
         while self._running:
+            cycle_ok = True
             try:
                 self._cycle_n += 1
                 # Hot lane: every cycle
@@ -333,8 +350,17 @@ class TickerEngine:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.debug('TickerEngine: stocks loop error: %s', exc)
-            await asyncio.sleep(POLL_STOCKS_SECS)
+                cycle_ok = False
+                logger.warning('TickerEngine: stocks loop error: %s', exc)
+            # Apply backoff if cycle failed, otherwise reset.
+            if cycle_ok:
+                backoff = 0.0
+                jitter = random.uniform(0, POLL_JITTER_SECS)
+                await asyncio.sleep(POLL_STOCKS_SECS + jitter)
+            else:
+                backoff = min(_BACKOFF_MAX, max(_BACKOFF_INITIAL, backoff * _BACKOFF_FACTOR or _BACKOFF_INITIAL))
+                logger.info('TickerEngine: backing off %.1fs after yfinance error', backoff)
+                await asyncio.sleep(backoff)
 
     async def _slow_lane_loop(self) -> None:
         """Re-check a few stalled tickers every cycle.

@@ -103,25 +103,28 @@ def _now_iso() -> str:
 
 
 def _password_hash(password: str) -> str:
-    """Hash a password using bcrypt (preferred) with a salted-SHA256 fallback.
+    """Hash a password using bcrypt.
 
-    New passwords get ``bcrypt$`` prefix so we can identify the algorithm.
-    Legacy ``saham-app:sha256`` hashes still verify (no migration needed).
+    All new passwords get a ``bcrypt$`` prefix so we can identify the algorithm
+    on verify. Legacy ``sha256$`` hashes still verify in :func:`_password_verify`
+    so existing users aren't locked out after a re-hash migration.
     """
     if not isinstance(password, str) or not password:
         return ''
-    try:
-        import bcrypt as _bcrypt
-        salt = _bcrypt.gensalt(rounds=12)
-        digest = _bcrypt.hashpw(password.encode('utf-8'), salt)
-        return 'bcrypt$' + digest.decode('ascii')
-    except Exception:
-        # Fallback to legacy salted SHA256 if bcrypt unavailable
-        return 'sha256$' + hashlib.sha256(('saham-app:' + password).encode('utf-8')).hexdigest()
+    import bcrypt as _bcrypt
+    salt = _bcrypt.gensalt(rounds=12)
+    digest = _bcrypt.hashpw(password.encode('utf-8'), salt)
+    return 'bcrypt$' + digest.decode('ascii')
 
 
 def _password_verify(password: str, stored: str) -> bool:
-    """Constant-time verify of (password, stored_hash)."""
+    """Constant-time verify of (password, stored_hash).
+
+    Supports both the new ``bcrypt$`` format and legacy ``sha256$`` and bare-SHA256
+    hashes so that users created before the bcrypt migration can still log in.
+    On a successful legacy match the caller is expected to transparently re-hash
+    with bcrypt on the next password change / explicit migration.
+    """
     if not stored or not password:
         return False
     try:
@@ -133,7 +136,7 @@ def _password_verify(password: str, stored: str) -> bool:
                 stored[7:],
                 hashlib.sha256(('saham-app:' + password).encode('utf-8')).hexdigest(),
             )
-        # Legacy unsalted format (pre-prefix hashes): best-effort match
+        # Legacy bare-SHA256 format (pre-prefix hashes): best-effort match
         legacy = hashlib.sha256(('saham-app:' + password).encode('utf-8')).hexdigest()
         return hmac.compare_digest(stored, legacy)
     except Exception:
@@ -175,14 +178,24 @@ class _PgConn:
 
 
 def _db_conn():
+    """Resolve a database connection.
+
+    Production (non-development) requires Postgres — fail fast on any connection
+    error rather than silently writing to a local SQLite that diverges from the
+    canonical store. Local development keeps the SQLite fallback for friction-
+    free setup when no DATABASE_URL is configured.
+    """
     if USE_POSTGRES:
-        try:
-            import psycopg
-            from psycopg.rows import dict_row
-            conn = psycopg.connect(DATABASE_URL_CLEAN, sslmode='require', row_factory=dict_row)
-            return _PgConn(conn)
-        except Exception as exc:
-            logger.warning('Postgres unavailable, fallback SQLite: %s', exc)
+        import psycopg
+        from psycopg.rows import dict_row
+        conn = psycopg.connect(DATABASE_URL_CLEAN, sslmode='require', row_factory=dict_row)
+        return _PgConn(conn)
+    if not IS_DEVELOPMENT:
+        # Production env but no DATABASE_URL — refuse to start with silent SQLite.
+        raise RuntimeError(
+            'Refusing to start: production env (ENV=' + ENV_MODE + ') has no '
+            'DATABASE_URL/POSTGRES_URL configured. SQLite is dev-only.'
+        )
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
