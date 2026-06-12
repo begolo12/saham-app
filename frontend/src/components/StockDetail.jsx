@@ -75,8 +75,6 @@ export default function StockDetail() {
 
   return (
     <div className="stock-detail">
-      <button className="detail-back" onClick={() => navigate(-1)}><span className="detail-back-arrow">←</span> Kembali</button>
-
       <div className="detail-hero">
         <h2 className="detail-hero-symbol">{d.symbol}</h2>
         <p className="detail-hero-name">{d.name}</p>

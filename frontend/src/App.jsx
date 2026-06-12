@@ -1,9 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import StockList from './components/StockList';
-import MarketSummary from './components/MarketSummary';
-import RecommendationStrip from './components/RecommendationStrip';
-import SignalDashboard from './components/SignalDashboard';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+
 import ErrorBoundary from './components/ErrorBoundary';
 import PageErrorBoundary from './components/PageErrorBoundary';
 import BottomNav from './components/BottomNav';
@@ -11,29 +8,26 @@ import FloatingBelajar from './components/FloatingBelajar';
 import BottomSheet from './components/BottomSheet';
 import InstallPrompt from './components/InstallPrompt';
 import Skeleton from './components/Skeleton';
+import SignalBadge from './components/SignalBadge';
 import { fmtTime, countSignal } from './utils';
-import { fetchLearningSummary, evaluateLearning, fetchNews } from './api';
+import { lightHaptic, mediumHaptic } from './utils/haptic';
+import useTheme from './utils/useTheme';
+import { ensureBackHistory } from './utils/pwaBack';
+
 import useAuthStore from './stores/authStore';
 import useStocksStore from './stores/stocksStore';
-import usePortfolioStore from './stores/portfolioStore';
-import useTheme from './utils/useTheme';
-import SignalBadge from './components/SignalBadge';
-import { lightHaptic, mediumHaptic } from './utils/haptic';
 
-const StockDetail = lazy(() => import('./components/StockDetail'));
-const ReportPanel = lazy(() => import('./components/ReportPanel'));
-const NewsPanel = lazy(() => import('./components/NewsPanel'));
-const PortfolioPanel = lazy(() => import('./components/PortfolioPanel'));
-const LearningPanel = lazy(() => import('./components/LearningPanel'));
-const LoginPage = lazy(() => import('./components/LoginPage'));
-const AdminUsersPanel = lazy(() => import('./components/AdminUsersPanel'));
-const AccuracyDashboard = lazy(() => import('./components/AccuracyDashboard'));
+import MarketPage from './pages/MarketPage';
+import SignalPage from './pages/SignalPage';
+import NewsPage from './pages/NewsPage';
+import PortfolioPage from './pages/PortfolioPage';
+import LearningPage from './pages/LearningPage';
+import ReportPage from './pages/ReportPage';
+import AccuracyPage from './pages/AccuracyPage';
+import StockDetailPage from './pages/StockDetailPage';
+import LoginRoute from './pages/LoginRoute';
 
-const WATCHLIST_KEY = 'saham_watchlist';
-
-function loadWatchlist() {
-  try { return JSON.parse(localStorage.getItem(WATCHLIST_KEY)) || []; } catch { return []; }
-}
+/* ─────────────────────────── Skeletons ─────────────────────────── */
 
 function LoadingScreen() {
   return (
@@ -47,143 +41,131 @@ function LoadingScreen() {
   );
 }
 
-const fallbackSkeleton = <div style={{ padding: '0 16px' }}><Skeleton variant="card" count={4} /></div>;
-const detailFallback = <div className="stock-detail"><Skeleton variant="detail" /></div>;
-const reportFallback = <div style={{ padding: '0 16px' }}><Skeleton variant="market-summary" /><Skeleton variant="card" count={3} /></div>;
+const listFallback = (
+  <div className="page" style={{ padding: '0 16px' }}>
+    <Skeleton variant="card" count={4} />
+  </div>
+);
 
-/* ───────────────────────────── Page components ───────────────────────────── */
+const reportFallback = (
+  <div className="page" style={{ padding: '0 16px' }}>
+    <Skeleton variant="market-summary" />
+    <Skeleton variant="card" count={3} />
+  </div>
+);
 
-/** Market home — market summary + StockList with top stocks */
-function MarketPage({ watchlist, onToggleWatchlist, onSelectStock, handleRefresh, loading }) {
-  const { topStocks, allStocks, marketSummary } = useStocksStore();
-  const displayStocks = allStocks.length ? allStocks : topStocks;
-  const signalStats = {
-    beli: countSignal(displayStocks, 'BUY'),
-    jual: countSignal(displayStocks, 'SELL'),
-    tahan: countSignal(displayStocks, 'NEUTRAL'),
-  };
+/* ─────────────────────────── Header ─────────────────────────── */
+
+const PAGE_TITLES = {
+  '/': 'Saham ID',
+  '/signal': 'Sinyal',
+  '/news': 'Berita',
+  '/portfolio': 'Portofolio',
+  '/learning': 'Pembelajaran',
+  '/accuracy': 'Akurasi',
+  '/report': 'Laporan',
+};
+
+function resolveTitle(pathname) {
+  if (pathname.startsWith('/detail/')) return 'Detail Saham';
+  return PAGE_TITLES[pathname] || 'Saham ID';
+}
+
+function AppHeader({ authUser, lastUpdatedStr, resolved, toggleTheme, onBack, onLogout, showBack, title }) {
   return (
-    <div className="page-enter">
-      {marketSummary && <MarketSummary marketSummary={marketSummary} signalStats={signalStats} />}
-      <StockList
-        stocks={topStocks}
-        loading={loading && !topStocks.length}
-        onRefresh={handleRefresh}
-        onSelectStock={onSelectStock}
-        watchlist={watchlist}
-        onToggleWatchlist={onToggleWatchlist}
-        defaultSort="default"
-      />
-    </div>
+    <header className="app-header">
+      <div className="app-title-wrap">
+        {showBack ? (
+          <button
+            className="header-back-btn"
+            onClick={onBack}
+            aria-label="Kembali"
+            type="button"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+        ) : null}
+        <h1 className="app-title">{title}</h1>
+        {!showBack && <span className="live-dot" />}
+      </div>
+      <div className="header-right">
+        {authUser && <span className="last-updated">{authUser.username}</span>}
+        {lastUpdatedStr && !showBack && <span className="last-updated">· {lastUpdatedStr}</span>}
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label={resolved === 'light' ? 'Aktifkan mode gelap' : 'Aktifkan mode terang'}
+          title={resolved === 'light' ? 'Mode gelap' : 'Mode terang'}
+        >
+          <svg className="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg className="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
+        </button>
+        {authUser && (
+          <button className="logout-btn" onClick={onLogout} type="button">Keluar</button>
+        )}
+      </div>
+    </header>
   );
 }
 
-/** Signal page — recommendation strip + StockList with all stocks, signal sort */
-function SignalPage({ watchlist, onToggleWatchlist, onSelectStock, handleRefresh, loading, recommendedStocks, onShowMore }) {
-  const { allStocks } = useStocksStore();
-  return (
-    <div className="page-enter">
-      {recommendedStocks.length > 0 && (
-        <RecommendationStrip recommendedStocks={recommendedStocks} onSelectStock={onSelectStock} onShowMore={onShowMore} />
-      )}
-      <StockList
-        stocks={allStocks}
-        loading={loading && !allStocks.length}
-        onRefresh={handleRefresh}
-        onSelectStock={onSelectStock}
-        watchlist={watchlist}
-        onToggleWatchlist={onToggleWatchlist}
-        defaultSort="sinyal"
-      />
-    </div>
-  );
-}
+/* ─────────────────────────── Pull-to-refresh ─────────────────────────── */
 
-/** News page */
-function NewsPage({ onSelectStock }) {
-  const [newsData, setNewsData] = useState(null);
-  const [newsLoading, setNewsLoading] = useState(false);
-  const { allStocks, topStocks, fetchAllStocks } = useStocksStore();
+function usePullToRefresh(onRefresh, scrollRef) {
+  const [pulling, setPulling] = useState(false);
+  const [pullY, setPullY] = useState(0);
+  const touchStartY = useRef(0);
+  const scrollAtStart = useRef(0);
 
-  const loadNews = useCallback(async (symbol = '') => {
-    setNewsLoading(true);
-    try { setNewsData(await fetchNews(symbol, 8)); } catch { setNewsData({ items: [] }); }
-    finally { setNewsLoading(false); }
+  const onTouchStart = useCallback((e) => {
+    if (scrollRef.current) scrollAtStart.current = scrollRef.current.scrollTop;
+    touchStartY.current = e.touches[0].clientY;
+  }, [scrollRef]);
+
+  const onTouchMove = useCallback((e) => {
+    if (scrollAtStart.current > 0) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (dy > 0) {
+      setPulling(true);
+      setPullY(Math.min(dy * 0.4, 80));
+    }
   }, []);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { loadNews(); if (!allStocks.length) fetchAllStocks(); }, []);
+  const onTouchEnd = useCallback(() => {
+    if (pullY > 40) onRefresh();
+    setPulling(false);
+    setPullY(0);
+  }, [pullY, onRefresh]);
 
-  return (
-    <div className="page-enter">
-      <NewsPanel news={newsData} loading={newsLoading} stocks={allStocks.length ? allStocks : topStocks} onLoadSymbol={loadNews} onOpenStock={onSelectStock} />
-    </div>
-  );
+  return { pulling, pullY, onTouchStart, onTouchMove, onTouchEnd };
 }
 
-/** Portfolio page */
-function PortfolioPage() {
-  const { portfolio, fetchPortfolio, savePosition, deletePosition } = usePortfolioStore();
-  const { allStocks, topStocks, fetchAllStocks } = useStocksStore();
-  const { authUser } = useAuthStore();
+/* ─────────────────────────── Watchlist hook ─────────────────────────── */
 
-  useEffect(() => { if (authUser) fetchPortfolio(); if (!allStocks.length) fetchAllStocks(); }, [authUser]);
+const WATCHLIST_KEY = 'saham_watchlist';
 
-  return (
-    <div className="page-enter">
-      <Suspense fallback={fallbackSkeleton}>
-        <AdminUsersPanel authUser={authUser} />
-        <PortfolioPanel portfolio={portfolio} onSave={savePosition} onDelete={deletePosition} stocks={allStocks.length ? allStocks : topStocks} />
-      </Suspense>
-    </div>
-  );
+function loadWatchlist() {
+  try { return JSON.parse(localStorage.getItem(WATCHLIST_KEY)) || []; } catch { return []; }
 }
 
-/** Learning page */
-function LearningPage() {
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(false);
+function useWatchlist() {
+  const [watchlist, setWatchlist] = useState(loadWatchlist);
 
-  const fetchSummary = useCallback(async () => {
-    setLoading(true);
-    try { const json = await fetchLearningSummary(); setSummary(json.data || json); }
-    catch { setSummary({ total_records: 0, pending_evaluation: 0, evaluated: 0, accuracy: 0, by_signal: [], recent: [] }); }
-    finally { setLoading(false); }
+  useEffect(() => {
+    localStorage.setItem(WATCHLIST_KEY, JSON.stringify(watchlist));
+  }, [watchlist]);
+
+  const toggle = useCallback((symbol) => {
+    lightHaptic();
+    setWatchlist((prev) => (prev.includes(symbol) ? prev.filter((s) => s !== symbol) : [...prev, symbol]));
   }, []);
 
-  const handleEvaluate = useCallback(async () => {
-    setLoading(true);
-    try { await evaluateLearning(100); await fetchSummary(); }
-    finally { setLoading(false); }
-  }, [fetchSummary]);
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchSummary(); }, [fetchSummary]);
-
-  return (
-    <div className="page-enter">
-      <LearningPanel summary={summary} loading={loading} onEvaluate={handleEvaluate} />
-    </div>
-  );
+  return { watchlist, toggle };
 }
 
-/** Report page */
-function ReportPage() {
-  const { dailyReport, fetchDailyReport } = usePortfolioStore();
-  const { authUser } = useAuthStore();
-
-  useEffect(() => { if (authUser) fetchDailyReport(); }, [authUser]);
-
-  return (
-    <div className="page-enter">
-      <Suspense fallback={reportFallback}>
-        <ReportPanel report={dailyReport} />
-      </Suspense>
-    </div>
-  );
-}
-
-/* ───────────────────────────── App shell ───────────────────────────── */
+/* ─────────────────────────── App shell ─────────────────────────── */
 
 export default function App() {
   const navigate = useNavigate();
@@ -192,49 +174,55 @@ export default function App() {
   const { allStocks, loading, lastUpdated, fetchTopStocks, fetchMarketSummary } = useStocksStore();
   const { resolved, toggle: toggleTheme } = useTheme();
 
-  // Local UI state
-  const [watchlist, setWatchlist] = useState(loadWatchlist);
-  const [recommendationModalOpen, setRecommendationModalOpen] = useState(false);
+  // UI state
   const [offline, setOffline] = useState(!navigator.onLine);
-  const [pulling, setPulling] = useState(false);
-  const [pullY, setPullY] = useState(0);
-  const touchStartY = useRef(0);
-  const scrollRef = useRef(0);
+  const [recommendationModalOpen, setRecommendationModalOpen] = useState(false);
+  const { watchlist, toggle: toggleWatchlist } = useWatchlist();
   const mainRef = useRef(null);
 
-  // Offline detection
+  // PWA: patch history on cold-start deep link
   useEffect(() => {
-    const goOffline = () => setOffline(true);
-    const goOnline = () => setOffline(false);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
+    ensureBackHistory(location.pathname);
+  }, [location.pathname]);
+
+  // Online detection
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
   }, []);
 
-  // Watchlist persistence
-  useEffect(() => { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(watchlist)); }, [watchlist]);
-
-  // Auth check
-  useEffect(() => { checkSession(); }, []);
-
-  // Initial data fetch
-  useEffect(() => { fetchTopStocks(); fetchMarketSummary(); }, []);
+  // Auth + initial data
+  useEffect(() => { checkSession(); }, [checkSession]);
+  useEffect(() => { fetchTopStocks(); fetchMarketSummary(); }, [fetchTopStocks, fetchMarketSummary]);
 
   // Refresh intervals
   useEffect(() => {
-    const marketInterval = setInterval(fetchMarketSummary, 30000);
-    const stockInterval = setInterval(fetchTopStocks, 60000);
-    return () => { clearInterval(marketInterval); clearInterval(stockInterval); };
+    const market = setInterval(fetchMarketSummary, 30000);
+    const stocks = setInterval(fetchTopStocks, 60000);
+    return () => { clearInterval(market); clearInterval(stocks); };
   }, [fetchTopStocks, fetchMarketSummary]);
 
-  // Derived data
+  // Derived
   const lastUpdatedStr = lastUpdated ? fmtTime(lastUpdated) : '';
   const isDetailPage = location.pathname.startsWith('/detail/');
   const isAccuracyPage = location.pathname.startsWith('/accuracy');
+  const isAdminPage = location.pathname.startsWith('/admin');
+  const isLearningPage = location.pathname.startsWith('/learning');
+  const showBack = isDetailPage || isAccuracyPage;
+  const showBottomNav = !isDetailPage && !isAccuracyPage && !isAdminPage && !isLearningPage;
+  const title = resolveTitle(location.pathname);
+
   const recommendedStocks = allStocks
-    .filter(s => s.signal === 'BUY' || s.signal === 'SELL')
+    .filter((s) => s.signal === 'BUY' || s.signal === 'SELL')
     .sort((a, b) => (b.signal_strength || 0) - (a.signal_strength || 0));
 
+  /* Actions */
   const handleRefresh = useCallback(() => {
     lightHaptic();
     fetchTopStocks();
@@ -246,35 +234,29 @@ export default function App() {
     navigate(`/detail/${stock.symbol}`);
   }, [navigate]);
 
-  const toggleWatchlist = useCallback((symbol) => {
+  const handleBack = useCallback(() => {
     lightHaptic();
-    setWatchlist(prev => prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol]);
-  }, []);
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  }, [navigate]);
+
+  const handleLogout = useCallback(() => {
+    lightHaptic();
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   const openRecommendations = useCallback(() => {
     mediumHaptic();
     setRecommendationModalOpen(true);
   }, []);
 
-  // Pull-to-refresh
-  const handleTouchStart = useCallback((e) => {
-    if (mainRef.current) scrollRef.current = mainRef.current.scrollTop;
-    touchStartY.current = e.touches[0].clientY;
-  }, []);
+  const pull = usePullToRefresh(handleRefresh, mainRef);
 
-  const handleTouchMove = useCallback((e) => {
-    if (scrollRef.current > 0) return;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    if (dy > 0) { setPulling(true); setPullY(Math.min(dy * 0.4, 80)); }
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (pullY > 40 && !loading) handleRefresh();
-    setPulling(false);
-    setPullY(0);
-  }, [pullY, loading, handleRefresh]);
-
-  // ── Auth guard ──
+  /* Auth guard */
   if (!authChecked) return <LoadingScreen />;
 
   if (!authUser) {
@@ -282,170 +264,161 @@ export default function App() {
       <ErrorBoundary>
         <Suspense fallback={<LoadingScreen />}>
           <Routes>
-            <Route path="*" element={<PageErrorBoundary><LoginPage /></PageErrorBoundary>} />
+            <Route path="*" element={<LoginRoute />} />
           </Routes>
         </Suspense>
       </ErrorBoundary>
     );
   }
 
-  // ── Authenticated app ──
+  /* Authenticated app */
   return (
     <ErrorBoundary>
-    <div className="app"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Header */}
-      <header className="app-header">
-        <div className="app-title-wrap">
-          {isAccuracyPage ? (
-            <button
-              onClick={() => navigate(-1)}
-              className="logout-btn"
-              style={{ padding: '6px 10px', fontSize: 12, marginRight: 4 }}
-              aria-label="Kembali"
-            >
-              ← Kembali
-            </button>
-          ) : null}
-          <h1 className="app-title">{isAccuracyPage ? 'Akurasi' : 'Saham ID'}</h1>
-          {!isAccuracyPage && <span className="live-dot" />}
-        </div>
-        <div className="header-right">
-          <span className="last-updated">{authUser.username}</span>
-          {lastUpdatedStr && <span className="last-updated">Diperbarui: {lastUpdatedStr}</span>}
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label={resolved === 'light' ? 'Aktifkan mode gelap' : 'Aktifkan mode terang'}
-            title={resolved === 'light' ? 'Mode gelap' : 'Mode terang'}
-          >
-            <svg className="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            <svg className="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
-          </button>
-          <button className="logout-btn" onClick={() => { lightHaptic(); logout(); navigate('/login'); }}>Keluar</button>
-        </div>
-      </header>
-
-      <main className="app-main" ref={mainRef}>
-        {offline && (
-          <div className="offline-indicator">
-            <span className="offline-icon">✈️</span>
-            Tidak ada koneksi internet — data mungkin tidak terbarui
-          </div>
-        )}
-        {pulling && (
-          <div className="pull-indicator" style={{ opacity: Math.min(pullY / 40, 1), height: pullY }}>
-            {pullY > 40 ? 'Lepaskan untuk segarkan' : 'Tarik ke bawah'}
-          </div>
-        )}
-
-        <Suspense fallback={fallbackSkeleton}>
-          <Routes>
-            <Route path="/" element={
-              <PageErrorBoundary>
-                <MarketPage watchlist={watchlist} onToggleWatchlist={toggleWatchlist} onSelectStock={handleSelectStock} handleRefresh={handleRefresh} loading={loading} />
-              </PageErrorBoundary>
-            } />
-            <Route path="/signal" element={
-              <PageErrorBoundary>
-                <SignalPage watchlist={watchlist} onToggleWatchlist={toggleWatchlist} onSelectStock={handleSelectStock} handleRefresh={handleRefresh} loading={loading} recommendedStocks={recommendedStocks} onShowMore={openRecommendations} />
-              </PageErrorBoundary>
-            } />
-            <Route path="/detail/:symbol" element={
-              <PageErrorBoundary>
-                <Suspense fallback={detailFallback}>
-                  <div className="page-enter"><StockDetail /></div>
-                </Suspense>
-              </PageErrorBoundary>
-            } />
-            <Route path="/news" element={
-              <PageErrorBoundary>
-                <NewsPage onSelectStock={handleSelectStock} />
-              </PageErrorBoundary>
-            } />
-            <Route path="/portfolio" element={
-              <PageErrorBoundary>
-                <PortfolioPage />
-              </PageErrorBoundary>
-            } />
-            <Route path="/learning" element={
-              <PageErrorBoundary>
-                <LearningPage />
-              </PageErrorBoundary>
-            } />
-            <Route path="/accuracy" element={
-              <PageErrorBoundary>
-                <div className="page-enter">
-                  <AccuracyDashboard />
-                </div>
-              </PageErrorBoundary>
-            } />
-            <Route path="/report" element={
-              <PageErrorBoundary>
-                <ReportPage />
-              </PageErrorBoundary>
-            } />
-            <Route path="/admin" element={
-              <PageErrorBoundary>
-                <AdminUsersPanel authUser={authUser} />
-              </PageErrorBoundary>
-            } />
-            <Route path="*" element={
-              <PageErrorBoundary>
-                <div className="page-enter">
-                  <SignalDashboard allStocks={allStocks} signalStats={{ beli: countSignal(allStocks, 'BUY'), jual: countSignal(allStocks, 'SELL'), tahan: countSignal(allStocks, 'NEUTRAL') }} onSelectStock={handleSelectStock} />
-                </div>
-              </PageErrorBoundary>
-            } />
-          </Routes>
-        </Suspense>
-      </main>
-
-      <BottomSheet
-        open={recommendationModalOpen}
-        onClose={() => setRecommendationModalOpen(false)}
-        title="Semua Sinyal"
-        subtitle={`${recommendedStocks.length} rekomendasi aktif`}
+      <div
+        className="app"
+        onTouchStart={pull.onTouchStart}
+        onTouchMove={pull.onTouchMove}
+        onTouchEnd={pull.onTouchEnd}
       >
-        {recommendedStocks.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-state-icon">📈</span>
-            <p className="empty-state-title">Belum ada sinyal aktif</p>
-            <p className="empty-state-desc">Sinyal BUY/SELL akan muncul di sini</p>
-          </div>
-        ) : (
-          <div className="bottom-sheet-list">
-            {recommendedStocks.map((stock) => (
-              <button
-                key={stock.symbol}
-                className="bottom-sheet-item"
-                onClick={() => {
-                  lightHaptic();
-                  setRecommendationModalOpen(false);
-                  handleSelectStock(stock);
-                }}
-              >
-                <div className="bottom-sheet-item-meta">
-                  <b>{stock.symbol}</b>
-                  <span>{stock.name || stock.sector || '-'}</span>
-                </div>
-                <SignalBadge signal={stock.signal} strength={stock.signal_strength} />
-              </button>
-            ))}
-          </div>
-        )}
-      </BottomSheet>
+        <AppHeader
+          authUser={authUser}
+          lastUpdatedStr={lastUpdatedStr}
+          resolved={resolved}
+          toggleTheme={toggleTheme}
+          onBack={handleBack}
+          onLogout={handleLogout}
+          showBack={showBack}
+          title={title}
+        />
 
-      <InstallPrompt />
+        <main className="app-main" ref={mainRef}>
+          {offline && (
+            <div className="offline-indicator">
+              <span className="offline-icon">✈️</span>
+              Tidak ada koneksi internet — data mungkin tidak terbarui
+            </div>
+          )}
+          {pull.pulling && (
+            <div
+              className="pull-indicator"
+              style={{ opacity: Math.min(pull.pullY / 40, 1), height: pull.pullY }}
+            >
+              {pull.pullY > 40 ? 'Lepaskan untuk segarkan' : 'Tarik ke bawah'}
+            </div>
+          )}
 
-      {!isDetailPage && !isAccuracyPage && <BottomNav />}
+          <Suspense fallback={listFallback}>
+            <Routes>
+              <Route path="/" element={
+                <PageErrorBoundary>
+                  <MarketPage
+                    watchlist={watchlist}
+                    onToggleWatchlist={toggleWatchlist}
+                    onSelectStock={handleSelectStock}
+                    handleRefresh={handleRefresh}
+                    loading={loading}
+                  />
+                </PageErrorBoundary>
+              } />
 
-      <FloatingBelajar onClick={() => navigate('/learning')} />
-    </div>
+              <Route path="/signal" element={
+                <PageErrorBoundary>
+                  <SignalPage
+                    watchlist={watchlist}
+                    onToggleWatchlist={toggleWatchlist}
+                    onSelectStock={handleSelectStock}
+                    handleRefresh={handleRefresh}
+                    loading={loading}
+                    recommendedStocks={recommendedStocks}
+                    onShowMore={openRecommendations}
+                  />
+                </PageErrorBoundary>
+              } />
+
+              <Route path="/news" element={
+                <PageErrorBoundary>
+                  <NewsPage onSelectStock={handleSelectStock} />
+                </PageErrorBoundary>
+              } />
+
+              <Route path="/portfolio" element={
+                <PageErrorBoundary>
+                  <PortfolioPage />
+                </PageErrorBoundary>
+              } />
+
+              <Route path="/learning" element={
+                <PageErrorBoundary>
+                  <LearningPage />
+                </PageErrorBoundary>
+              } />
+
+              <Route path="/accuracy" element={
+                <PageErrorBoundary>
+                  <AccuracyPage />
+                </PageErrorBoundary>
+              } />
+
+              <Route path="/report" element={
+                <PageErrorBoundary>
+                  <Suspense fallback={reportFallback}>
+                    <ReportPage />
+                  </Suspense>
+                </PageErrorBoundary>
+              } />
+
+              <Route path="/detail/:symbol" element={
+                <PageErrorBoundary>
+                  <StockDetailPage />
+                </PageErrorBoundary>
+              } />
+
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </main>
+
+        <BottomSheet
+          open={recommendationModalOpen}
+          onClose={() => setRecommendationModalOpen(false)}
+          title="Semua Sinyal"
+          subtitle={`${recommendedStocks.length} rekomendasi aktif`}
+        >
+          {recommendedStocks.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">📈</span>
+              <p className="empty-state-title">Belum ada sinyal aktif</p>
+              <p className="empty-state-desc">Sinyal BUY/SELL akan muncul di sini</p>
+            </div>
+          ) : (
+            <div className="bottom-sheet-list">
+              {recommendedStocks.map((stock) => (
+                <button
+                  key={stock.symbol}
+                  className="bottom-sheet-item"
+                  onClick={() => {
+                    lightHaptic();
+                    setRecommendationModalOpen(false);
+                    handleSelectStock(stock);
+                  }}
+                >
+                  <div className="bottom-sheet-item-meta">
+                    <b>{stock.symbol}</b>
+                    <span>{stock.name || stock.sector || '-'}</span>
+                  </div>
+                  <SignalBadge signal={stock.signal} strength={stock.signal_strength} />
+                </button>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+
+        <InstallPrompt />
+
+        {showBottomNav && <BottomNav />}
+
+        <FloatingBelajar onClick={() => navigate('/learning')} />
+      </div>
     </ErrorBoundary>
   );
 }
