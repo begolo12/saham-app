@@ -32,3 +32,18 @@ export function countSignal(stocks, type) {
     return signal === type;
   }).length;
 }
+
+/**
+ * Display name for a stock. Backend list endpoint sets `name` to the symbol,
+ * so suppress duplicates. Returns real company name only if it differs from
+ * the symbol; otherwise falls back to sector or a generic default.
+ * @param {object|null|undefined} stock
+ * @param {string} [fallback='Saham IDX']
+ * @returns {string}
+ */
+export function displayName(stock, fallback = 'Saham IDX') {
+  if (!stock) return fallback;
+  const name = stock.name;
+  if (name && name !== stock.symbol) return name;
+  return stock.sector || fallback;
+}

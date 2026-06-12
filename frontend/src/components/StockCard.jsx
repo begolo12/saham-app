@@ -127,7 +127,9 @@ function StockCard({ stock, onClick, watchlist, onToggleWatchlist, index = 0, gr
               </div>
               <div className="stock-info">
                 <span className="stock-symbol">{stock.symbol}</span>
-                <span className="stock-name">{stock.name}</span>
+                {stock.name && stock.name !== stock.symbol && (
+                  <span className="stock-name">{stock.name}</span>
+                )}
                 {sector && (
                   <span className="sector-badge" style={{ background: sectorStyle.bg, color: sectorStyle.text }}>
                     {sector}

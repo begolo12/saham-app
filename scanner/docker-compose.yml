@@ -1,0 +1,35 @@
+name: saham-scanner
+
+services:
+  saham-scanner:
+    build:
+      context: ..
+      dockerfile: scanner/Dockerfile
+    image: saham-scanner:latest
+    container_name: saham-scanner
+    restart: unless-stopped
+    environment:
+      # Neon Postgres (the broker between NAS scanner and Vercel API)
+      DATABASE_URL: "${NEON_DATABASE_URL}"
+      # Scan cadence — every 60s is plenty for IDX; matches SW TTL in app
+      SCAN_INTERVAL: "60"
+      # 80 workers yfinance rate-limit headroom on the J4125 / 9.6GB NAS
+      SCAN_WORKERS: "60"
+      # 2 min per-scan budget — covers rate-limit backoff for the 951 universe
+      SCAN_BUDGET: "120"
+      # 0 = scan the full 951-ticker IDX universe
+      MAX_UNIVERSE: "0"
+      # HTTP server for healthchecks
+      PORT: "8765"
+      LOG_LEVEL: "INFO"
+    ports:
+      - "8765:8765"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8765/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    # Resource limits — keep the scanner from eating the NAS
+    mem_limit: 1g
+    cpus: 2.0

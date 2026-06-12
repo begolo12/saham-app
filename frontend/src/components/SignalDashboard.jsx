@@ -1,4 +1,4 @@
-import { fmtPrice } from '../utils';
+import { fmtPrice, displayName } from '../utils';
 
 /**
  * SignalDashboard — full signal statistics panel with BUY/SELL/NEUTRAL
@@ -67,7 +67,7 @@ export default function SignalDashboard({ allStocks = [], signalStats, onSelectS
                   </div>
                   <div>
                     <span style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{stock.symbol}</span>
-                    <span style={{ display: 'block', fontSize: 10, color: '#8E8E93', marginTop: 1 }}>{stock.name}</span>
+                    <span style={{ display: 'block', fontSize: 10, color: '#8E8E93', marginTop: 1 }}>{displayName(stock, '')}</span>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

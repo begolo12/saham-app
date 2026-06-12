@@ -218,8 +218,17 @@ async def lifespan(app: FastAPI):
     worker = get_worker()
     await worker.start()
     logger.info('Background worker started')
+
+    # Start live ticker engine (SSE broadcaster)
+    from services.ticker import TickerEngine
+    ticker = TickerEngine.instance()
+    await ticker.start()
+    logger.info('Ticker engine started')
+
     yield
+    await ticker.stop()
     await worker.stop()
+    logger.info('Ticker engine stopped')
     logger.info('Background worker stopped')
 
 
@@ -271,7 +280,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Import routes to register them on the app
-from routes import stocks, auth, portfolio, learning, news, market, accuracy  # noqa: E402
+from routes import stocks, auth, portfolio, learning, news, market, accuracy, ticker  # noqa: E402
 
 # Run DB migrations at startup. Wrapped in try/except so a transient
 # Postgres error (e.g. transaction-aborted from a prior half-applied

@@ -28,7 +28,7 @@ function SignalRing({ strength, color, size = 28 }) {
   );
 }
 
-function SignalBadge({ signal, strength, large }) {
+function SignalBadge({ signal, strength, large, compact }) {
   const c = COLORS[signal] || COLORS.HOLD;
   const [pulse, setPulse] = useState(false);
   const prevRef = useRef(signal);
@@ -43,7 +43,7 @@ function SignalBadge({ signal, strength, large }) {
   }, [signal]);
 
   return (
-    <div className={`signal-badge${pulse ? ' pulse' : ''}${large ? ' signal-badge-large' : ''}`}
+    <div className={`signal-badge${pulse ? ' pulse' : ''}${large ? ' signal-badge-large' : ''}${compact ? ' signal-badge-compact' : ''}`}
       style={large ? { flexDirection: 'column', alignItems: 'center', gap: 12 } : {}}>
       <span
         className="signal-badge-label"
@@ -52,19 +52,22 @@ function SignalBadge({ signal, strength, large }) {
           color: c.text,
           border: `1px solid ${c.border}`,
           ...(large ? { fontSize: 18, padding: '8px 28px', borderRadius: 12 } : {}),
+          ...(compact ? { padding: '2px 8px', fontSize: 10, borderRadius: 6 } : {}),
         }}
       >
         <span className="signal-badge-icon">{SIGNAL_ICONS[signal] || '◆'}</span>
         {SIGNAL_LABELS[signal] || 'TAHAN'}
       </span>
-      <div className="signal-ring-wrap" style={large ? { flexDirection: 'column', alignItems: 'center', gap: 6 } : {}}>
-        <SignalRing strength={strength} color={c.text} size={large ? 48 : 28} />
-        {large && (
-          <span style={{ fontSize: 12, color: c.text, fontWeight: 600 }}>
-            {strength ?? 0}/100
-          </span>
-        )}
-      </div>
+      {!compact && (
+        <div className="signal-ring-wrap" style={large ? { flexDirection: 'column', alignItems: 'center', gap: 6 } : {}}>
+          <SignalRing strength={strength} color={c.text} size={large ? 48 : 28} />
+          {large && (
+            <span style={{ fontSize: 12, color: c.text, fontWeight: 600 }}>
+              {strength ?? 0}/100
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

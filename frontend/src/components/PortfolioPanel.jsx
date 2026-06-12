@@ -1,92 +1,203 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { fmtPrice } from '../utils';
 import Skeleton from './Skeleton';
+import { lightHaptic, mediumHaptic, successHaptic } from '../utils/haptic';
 
+/**
+ * PortfolioPanel — compact virtual portfolio.
+ * - Summary row folded by default, tap to expand
+ * - "Tambah" inline form, collapsed by default, autocomplete via native datalist
+ * - Position rows: 1-line, tap to expand for full breakdown
+ */
 function PortfolioPanel({ portfolio, onSave, onDelete, stocks = [] }) {
-  const [form, setForm] = useState({ symbol: '', qty: '', avg_price: '' });
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [openForm, setOpenForm] = useState(false);
+  const [form, setForm] = useState({ symbol: '', qty: '1', avg_price: '' });
+  const [openPos, setOpenPos] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+
   const summary = portfolio?.summary || {};
   const positions = portfolio?.positions || [];
-  const symbolQuery = (form.symbol || '').toUpperCase();
-  const suggestions = (stocks || [])
-    .filter(s => symbolQuery && (s.symbol || '').toUpperCase().includes(symbolQuery))
-    .sort((a, b) => (a.symbol || '').localeCompare(b.symbol || ''))
-    .slice(0, 60);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- stable, no deps needed
-  const selectSuggestion = useCallback((stock) => {
-    setForm(prev => ({ ...prev, symbol: (stock.symbol || '').toUpperCase() }));
-    setShowSuggestions(false);
+  const symbolOptions = useMemo(
+    () => (stocks || [])
+      .map((s) => s.symbol)
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .sort(),
+    [stocks],
+  );
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 1600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const showToast = useCallback((msg) => {
+    successHaptic?.();
+    setToast(msg);
   }, []);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- compiler infers different deps; form is a snapshot at submit time
-  const submit = useCallback((e) => {
-    e.preventDefault();
+  const handleSubmit = useCallback(async (e) => {
+    e?.preventDefault?.();
     if (!form.symbol || !form.qty || !form.avg_price) return;
-    onSave({ symbol: form.symbol, qty: Number(form.qty), avg_price: Number(form.avg_price) });
-    setForm({ symbol: '', qty: '', avg_price: '' });
-    setShowSuggestions(false);
-  }, [form, onSave]);
+    setBusy(true);
+    try {
+      await onSave({
+        symbol: form.symbol.toUpperCase(),
+        qty: Number(form.qty),
+        avg_price: Number(form.avg_price),
+      });
+      setForm({ symbol: '', qty: '1', avg_price: '' });
+      setOpenForm(false);
+      showToast('Posisi disimpan');
+    } finally {
+      setBusy(false);
+    }
+  }, [form, onSave, showToast]);
+
+  const handleDelete = useCallback(async (sym) => {
+    lightHaptic();
+    await onDelete(sym);
+    showToast(`${sym} dihapus`);
+  }, [onDelete, showToast]);
 
   if (!portfolio) {
     return (
-      <div style={{ padding: '0 16px 24px' }}>
+      <div className="report-compact">
         <Skeleton variant="market-summary" />
         <Skeleton variant="card" count={3} />
       </div>
     );
   }
 
-  return <div style={{ padding: '0 16px 24px' }}>
-    <div className="market-summary" style={{ margin: '0 0 12px 0' }}>
-      <div className="market-summary-header"><h3>Virtual Portfolio</h3><span style={{ color: (summary.total_pnl || 0) >= 0 ? '#34C759' : '#FF3B30', fontWeight: 800 }}>{(summary.total_pnl_pct || 0).toFixed(2)}%</span></div>
-      <div className="portfolio-grid">
-        <div className="learning-stat"><b>{fmtPrice(summary.total_value || 0)}</b><span>Nilai</span></div>
-        <div className="learning-stat"><b>{fmtPrice(summary.total_pnl || 0)}</b><span>P/L</span></div>
-        <div className="learning-stat"><b>{summary.win_rate || 0}%</b><span>Win rate</span></div>
-      </div>
-    </div>
-    <form className="portfolio-form" onSubmit={submit}>
-      <div className="portfolio-symbol-field">
-        <input
-          placeholder="Kode (BBCA)"
-          value={form.symbol}
-          onFocus={() => setShowSuggestions(Boolean(form.symbol))}
-          onChange={e => { setForm({ ...form, symbol: e.target.value.toUpperCase() }); setShowSuggestions(Boolean(e.target.value)); }}
-          autoComplete="off"
-        />
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="portfolio-autocomplete">
-            {suggestions.map(stock => (
-              <button
-                key={stock.symbol}
-                type="button"
-                className="portfolio-suggestion"
-                onMouseDown={e => { e.preventDefault(); selectSuggestion(stock); }}
-                onTouchStart={e => { e.preventDefault(); selectSuggestion(stock); }}
-              >
-                <b>{stock.symbol}</b><span>{stock.name || stock.sector || 'Saham IDX'}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <input placeholder="Lot/lembar" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
-      <input placeholder="Avg price" type="number" value={form.avg_price} onChange={e => setForm({ ...form, avg_price: e.target.value })} />
-      <button>Simpan</button>
-    </form>
-    <p className="section-label">Posisi</p>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {positions.map(pos => <div className="signal-card" key={pos.symbol}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-          <div><b style={{ color: '#fff' }}>{pos.symbol}</b><div style={{ color: '#8E8E93', fontSize: 12 }}>{pos.qty} @ {fmtPrice(pos.avg_price)} • now {fmtPrice(pos.current_price)}</div></div>
-          <div style={{ textAlign: 'right' }}><b style={{ color: pos.pnl >= 0 ? '#34C759' : '#FF3B30' }}>{pos.pnl_pct}%</b><div style={{ color: '#8E8E93', fontSize: 12 }}>{fmtPrice(pos.pnl)}</div></div>
+  return (
+    <div className="report-compact">
+      <details className="report-summary" open>
+        <summary>
+          <span className="rs-title">Porto</span>
+          <span className={`rs-pct ${(summary.total_pnl || 0) >= 0 ? 'pos' : 'neg'}`}>
+            {(summary.total_pnl_pct || 0).toFixed(2)}%
+          </span>
+          <span className="rs-chev" aria-hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+        </summary>
+        <div className="rs-body">
+          <div><span>Nilai</span><b>{fmtPrice(summary.total_value || 0)}</b></div>
+          <div><span>P/L</span><b className={(summary.total_pnl || 0) >= 0 ? 'pos' : 'neg'}>{fmtPrice(summary.total_pnl || 0)}</b></div>
+          <div><span>Win</span><b>{summary.win_rate || 0}%</b></div>
         </div>
-        <button className="sort-chip" style={{ marginTop: 10 }} onClick={() => onDelete(pos.symbol)}>Hapus</button>
-      </div>)}
-      {!positions.length && <div className="empty-state"><p className="empty-state-title">Porto kosong</p><p className="empty-state-desc">Masukkan posisi real app saham kamu di sini.</p></div>}
+      </details>
+
+      <div className="portfolio-toolbar">
+        <span className="section-label" style={{ margin: 0 }}>Posisi <span className="section-count">{positions.length}</span></span>
+        <button
+          type="button"
+          className="add-btn primary"
+          onClick={() => { mediumHaptic(); setOpenForm((v) => !v); }}
+        >
+          {openForm ? 'Batal' : '+ Tambah'}
+        </button>
+      </div>
+
+      {openForm && (
+        <form className="portfolio-form-compact" onSubmit={handleSubmit}>
+          <label>
+            <span>Kode</span>
+            <input
+              list="porto-symbols"
+              placeholder="BBCA"
+              value={form.symbol}
+              onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })}
+              autoComplete="off"
+            />
+            <datalist id="porto-symbols">
+              {symbolOptions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+          </label>
+          <label>
+            <span>Lot</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              value={form.qty}
+              onChange={(e) => setForm({ ...form, qty: e.target.value })}
+            />
+          </label>
+          <label>
+            <span>Avg</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={form.avg_price}
+              onChange={(e) => setForm({ ...form, avg_price: e.target.value })}
+            />
+          </label>
+          <button type="submit" className="add-btn primary" disabled={busy}>
+            {busy ? 'Simpan…' : 'Simpan'}
+          </button>
+        </form>
+      )}
+
+      <div className="compact-list">
+        {positions.map((pos) => {
+          const isOpen = openPos === pos.symbol;
+          const pnlPos = (pos.pnl || 0) >= 0;
+          return (
+            <div key={pos.symbol} className={`signal-card compact ${isOpen ? 'is-open' : ''}`}>
+              <button
+                type="button"
+                className="signal-card-row"
+                onClick={() => { lightHaptic(); setOpenPos(isOpen ? null : pos.symbol); }}
+                aria-expanded={isOpen}
+              >
+                <span className="signal-card-symbol">{pos.symbol}</span>
+                <span className="signal-card-pill" style={{ color: pnlPos ? 'var(--green)' : 'var(--red)' }}>
+                  {(pos.pnl_pct || 0).toFixed(1)}%
+                </span>
+                <span className="signal-card-price">{fmtPrice(pos.current_price)}</span>
+                <span className="signal-card-chev" aria-hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </span>
+              </button>
+              {!isOpen && (
+                <div className="signal-card-glance">
+                  <span>{pos.qty} lot @ {fmtPrice(pos.avg_price)}</span>
+                </div>
+              )}
+              {isOpen && (
+                <div className="signal-card-detail">
+                  <div className="signal-card-grid">
+                    <div><span>Qty</span><b>{pos.qty} lot</b></div>
+                    <div><span>Avg</span><b>{fmtPrice(pos.avg_price)}</b></div>
+                    <div><span>Now</span><b>{fmtPrice(pos.current_price)}</b></div>
+                    <div><span>P/L</span><b className={pnlPos ? 'pos' : 'neg'}>{fmtPrice(pos.pnl)}</b></div>
+                  </div>
+                  <div className="signal-card-actions">
+                    <button type="button" className="add-btn secondary danger" onClick={(e) => { e.stopPropagation(); handleDelete(pos.symbol); }}>
+                      Hapus
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {!positions.length && <div className="empty-line">Belum ada posisi · tambah dari Laporan atau +Tambah</div>}
+      </div>
+
+      {toast && (
+        <div className="toast" role="status">
+          <span className="toast-icon">✓</span>
+          <span>{toast}</span>
+        </div>
+      )}
     </div>
-  </div>;
+  );
 }
 
 export default memo(PortfolioPanel);

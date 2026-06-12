@@ -248,6 +248,14 @@ def _init_db():
             CREATE UNIQUE INDEX IF NOT EXISTS idx_virtual_portfolio_user_symbol ON virtual_portfolio(user_id, symbol);
             CREATE INDEX IF NOT EXISTS idx_virtual_portfolio_symbol ON virtual_portfolio(symbol);
             CREATE INDEX IF NOT EXISTS idx_app_users_refresh_token ON app_users(refresh_token);
+            -- Shared scanner cache (NAS scanner writes every 60s, Vercel API reads)
+            CREATE TABLE IF NOT EXISTS scanner_results (
+                id INTEGER PRIMARY KEY,
+                scanned_at TIMESTAMPTZ NOT NULL,
+                count INTEGER NOT NULL,
+                duration_ms INTEGER,
+                data JSONB NOT NULL
+            );
             ''')
             return
         conn.execute('''
@@ -316,6 +324,16 @@ def _init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_virtual_portfolio_symbol ON virtual_portfolio(symbol)')
         # Index on refresh_token for fast O(1) refresh-token validation lookups
         conn.execute('CREATE INDEX IF NOT EXISTS idx_app_users_refresh_token ON app_users(refresh_token)')
+        # Shared scanner cache (NAS scanner writes every 60s, Vercel API reads)
+        conn.execute('''
+        CREATE TABLE IF NOT EXISTS scanner_results (
+            id INTEGER PRIMARY KEY,
+            scanned_at TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            duration_ms INTEGER,
+            data TEXT NOT NULL
+        )
+        ''')
 
         # signal_weights table — canonical schema (ta_weight, fund_weight, ...).
         # Migrations also create a legacy variant (weight_technical, ...) for
@@ -726,3 +744,87 @@ def _learning_bias_for_symbol(symbol: str) -> float:
         return float(adj or 0)
     except Exception:
         return 0.0
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Shared scanner cache (NAS scanner → Neon → Vercel API)
+# ──────────────────────────────────────────────────────────────────────
+
+def save_scanner_result(rows: list, duration_ms: int) -> None:
+    """Persist a fresh scanner snapshot so Vercel API can read it on demand.
+
+    The single-row table (id=1) is upserted — keeps history small while
+    always giving the Vercel backend the latest result. JSONB on Postgres,
+    JSON-as-text on SQLite.
+    """
+    if not rows:
+        return
+    payload = json.dumps(rows, default=str)
+    scanned_at = _now_iso()
+    with _db_conn() as conn:
+        if USE_POSTGRES:
+            conn.execute(
+                '''INSERT INTO scanner_results (id, scanned_at, count, duration_ms, data)
+                   VALUES (1, %s, %s, %s, %s::jsonb)
+                   ON CONFLICT (id) DO UPDATE
+                   SET scanned_at = EXCLUDED.scanned_at,
+                       count = EXCLUDED.count,
+                       duration_ms = EXCLUDED.duration_ms,
+                       data = EXCLUDED.data''',
+                (scanned_at, len(rows), duration_ms, payload),
+            )
+        else:
+            conn.execute(
+                '''INSERT OR REPLACE INTO scanner_results
+                   (id, scanned_at, count, duration_ms, data)
+                   VALUES (?, ?, ?, ?, ?)''',
+                (1, scanned_at, len(rows), duration_ms, payload),
+            )
+        conn.commit()
+
+
+def load_latest_scanner_result(max_age_seconds: int = 300) -> Optional[dict]:
+    """Return the latest scanner snapshot if it's recent enough, else None.
+
+    `max_age_seconds` defaults to 5 minutes — covers a missed scan plus jitter.
+    """
+    with _db_conn() as conn:
+        if USE_POSTGRES:
+            row = conn.execute(
+                '''SELECT scanned_at, count, duration_ms, data
+                   FROM scanner_results WHERE id = 1'''
+            ).fetchone()
+        else:
+            row = conn.execute(
+                '''SELECT scanned_at, count, duration_ms, data
+                   FROM scanner_results WHERE id = 1'''
+            ).fetchone()
+    if not row:
+        return None
+    try:
+        scanned_at = row['scanned_at']
+        if USE_POSTGRES and scanned_at is not None and hasattr(scanned_at, 'timestamp'):
+            age = (datetime.now(timezone.utc) - scanned_at).total_seconds()
+        else:
+            scanned_dt = datetime.fromisoformat(str(scanned_at).replace('Z', '+00:00'))
+            if scanned_dt.tzinfo is None:
+                scanned_dt = scanned_dt.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - scanned_dt).total_seconds()
+    except Exception:
+        age = 0  # if we can't parse, accept it
+    if age > max_age_seconds:
+        return None
+    raw = row['data']
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode('utf-8')
+    if isinstance(raw, str):
+        rows = json.loads(raw)
+    else:
+        # Postgres JSONB already parsed to a Python object
+        rows = raw
+    return {
+        'scanned_at': str(row['scanned_at']),
+        'count': row['count'],
+        'duration_ms': row['duration_ms'],
+        'rows': rows,
+    }

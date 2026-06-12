@@ -1,5 +1,8 @@
 import time
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 import yfinance as yf
 import pandas as pd
 from typing import List, Dict, Any, Optional
@@ -14,7 +17,30 @@ MIN_VOLUME = 10_000
 MIN_AVG_VALUE = 10_000_000  # 10M IDR/day minimum avg traded value — keeps penny stocks (price>=50) at 10K+ volume
 MIN_DAYS = 20
 MAX_FAILED_RATIO = 0.5
-MAX_UNIVERSE = 280  # tuned for Vercel 30s scan budget with 40 workers
+# Default cap; when an external scanner is configured (see SCANNER_URL), this
+# limit is bypassed and we serve whatever the external scanner has.
+MAX_UNIVERSE = int(os.environ.get('SAHAM_MAX_UNIVERSE', 280))
+
+# Path to the canonical full-IDX universe (951 tickers, last refresh 2026).
+# Lives in data/idx_universe.txt — one ticker per line, e.g. "BBCA.JK".
+_UNIVERSE_FILE = Path(__file__).parent / 'data' / 'idx_universe.txt'
+
+
+def _load_full_universe() -> List[str]:
+    """Load the full IDX-listed universe from data/idx_universe.txt.
+
+    Used as the source of truth when SCANNER_URL is set or when MAX_UNIVERSE
+    is raised to 951. Falls back to a hardcoded minimum if the file is
+    missing (e.g. fresh clone without the data/ dir).
+    """
+    try:
+        with _UNIVERSE_FILE.open() as f:
+            tickers = [line.strip() for line in f if line.strip()]
+        if tickers:
+            return tickers
+    except FileNotFoundError:
+        pass
+    return []
 
 TOP_STOCK_FALLBACK = [
     {'symbol':'BBCA','name':'Bank Central Asia Tbk.','price':10250,'change_percent':0,'sector':'Perbankan','volume':1000000,'avg_volume':1000000,'avg_value':10000000000,'potential_score':88},
@@ -364,27 +390,69 @@ def _fetch_stock_card(symbol: str) -> Optional[Dict[str, Any]]:
 
 
 def get_top_stocks() -> List[Dict[str, Any]]:
-    """Fast parallel IDX scanner with stale cache and safe fallback."""
+    """Fast parallel IDX scanner with stale cache and safe fallback.
+
+    Lookup order:
+      1. SAHAM_SCANNER_FROM_DB=1 → read latest result from Neon
+         `scanner_results` table (written by NAS scanner every 60s)
+      2. SAHAM_SCANNER_URL set → fetch from external HTTP scanner
+      3. Local in-process scan (works on Vercel up to MAX_UNIVERSE)
+    """
+    # Path 1 — read from shared DB (NAS writes here, Vercel reads here)
+    if os.environ.get('SAHAM_SCANNER_FROM_DB', '').lower() in ('1', 'true', 'yes'):
+        try:
+            from services.db import load_latest_scanner_result
+            payload = load_latest_scanner_result(max_age_seconds=300)
+            if payload and payload.get('rows'):
+                return payload['rows']
+        except Exception:
+            pass  # fall through
+
+    # Path 2 — external HTTP scanner (e.g. NAS exposing a public port)
+    scanner_url = os.environ.get('SAHAM_SCANNER_URL')
+    if scanner_url:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(f'{scanner_url.rstrip("/")}/latest', timeout=4) as r:
+                payload = json.loads(r.read())
+            rows = payload.get('rows') or []
+            if rows:
+                return rows
+        except Exception:
+            pass  # fall through to local scan
+
+    # Path 3 — local in-process scan (works on Vercel up to MAX_UNIVERSE)
     now = time.time()
     cached = _top_stocks_cache.get('data') or []
     # Semi-live desktop mode: short cache keeps UI fresh without hammering yfinance.
     if cached and (now - _top_stocks_cache.get('timestamp', 0)) < 180:
         return cached
 
+    # Pick the universe to scan — full IDX if MAX_UNIVERSE allows, else hardcoded
+    full_universe = _load_full_universe()
+    if full_universe and MAX_UNIVERSE >= len(full_universe):
+        universe = full_universe
+        cap = len(full_universe)
+        worker_count = min(80, len(full_universe))
+        deadline_secs = 90  # local mode has no Vercel cap
+    else:
+        universe = INDONESIAN_STOCKS
+        cap = MAX_UNIVERSE
+        worker_count = 40
+        deadline_secs = 30
+
     results = []
-    # 40 workers balances yfinance rate-limit headroom against finishing the
-    # 280-symbol universe inside the 30s Vercel cold-start budget.
-    executor = ThreadPoolExecutor(max_workers=40)
-    futures = [executor.submit(_fetch_stock_card, symbol) for symbol in INDONESIAN_STOCKS[:MAX_UNIVERSE]]
+    executor = ThreadPoolExecutor(max_workers=worker_count)
+    futures = [executor.submit(_fetch_stock_card, symbol) for symbol in universe[:cap]]
     try:
-        deadline = now + 30  # 30s timeout so 280+ stocks can fetch on cold cache
-        for fut in as_completed(futures, timeout=32):
+        deadline = now + deadline_secs
+        for fut in as_completed(futures, timeout=deadline_secs + 2):
             if time.time() > deadline:
                 break
             item = fut.result()
             if item:
                 results.append(item)
-            if len(results) >= MAX_UNIVERSE:
+            if len(results) >= cap:
                 break
     except Exception:
         pass
@@ -396,7 +464,14 @@ def get_top_stocks() -> List[Dict[str, Any]]:
     results.sort(key=lambda x: (x.get('potential_score', 0), x.get('volume', 0), x.get('avg_value', 0)), reverse=True)
     if results:
         _top_stocks_cache['timestamp'] = now
-        _top_stocks_cache['data'] = results[:MAX_UNIVERSE]
+        _top_stocks_cache['data'] = results[:cap]
+        # Best-effort: persist to shared cache so cold clients get a hit
+        if os.environ.get('SAHAM_SCANNER_FROM_DB', '').lower() in ('1', 'true', 'yes'):
+            try:
+                from services.db import save_scanner_result
+                save_scanner_result(results, int((time.time() - now) * 1000))
+            except Exception:
+                pass
         return _top_stocks_cache['data']
     if cached:
         return cached

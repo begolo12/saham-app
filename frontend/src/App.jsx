@@ -4,12 +4,11 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import ErrorBoundary from './components/ErrorBoundary';
 import PageErrorBoundary from './components/PageErrorBoundary';
 import BottomNav from './components/BottomNav';
-import FloatingBelajar from './components/FloatingBelajar';
 import BottomSheet from './components/BottomSheet';
 import InstallPrompt from './components/InstallPrompt';
 import Skeleton from './components/Skeleton';
 import SignalBadge from './components/SignalBadge';
-import { fmtTime, countSignal } from './utils';
+import { fmtTime, countSignal, displayName } from './utils';
 import { lightHaptic, mediumHaptic } from './utils/haptic';
 import useTheme from './utils/useTheme';
 import { ensureBackHistory } from './utils/pwaBack';
@@ -213,9 +212,8 @@ export default function App() {
   const isDetailPage = location.pathname.startsWith('/detail/');
   const isAccuracyPage = location.pathname.startsWith('/accuracy');
   const isAdminPage = location.pathname.startsWith('/admin');
-  const isLearningPage = location.pathname.startsWith('/learning');
   const showBack = isDetailPage || isAccuracyPage;
-  const showBottomNav = !isDetailPage && !isAccuracyPage && !isAdminPage && !isLearningPage;
+  const showBottomNav = !isDetailPage && !isAccuracyPage && !isAdminPage;
   const title = resolveTitle(location.pathname);
 
   const recommendedStocks = allStocks
@@ -402,7 +400,7 @@ export default function App() {
                 >
                   <div className="bottom-sheet-item-meta">
                     <b>{stock.symbol}</b>
-                    <span>{stock.name || stock.sector || '-'}</span>
+                    <span>{displayName(stock, '-')}</span>
                   </div>
                   <SignalBadge signal={stock.signal} strength={stock.signal_strength} />
                 </button>
@@ -414,8 +412,6 @@ export default function App() {
         <InstallPrompt />
 
         {showBottomNav && <BottomNav />}
-
-        <FloatingBelajar onClick={() => navigate('/learning')} />
       </div>
     </ErrorBoundary>
   );

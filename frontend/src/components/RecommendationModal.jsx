@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import SignalBadge from './SignalBadge';
+import { displayName } from '../utils';
 
 /**
  * RecommendationModal — full-screen modal listing all BUY/SELL recommendations.
@@ -35,7 +36,7 @@ function RecommendationModal({ open, onClose, recommendedStocks = [], onSelectSt
             >
               <div>
                 <b>{stock.symbol}</b>
-                <span>{stock.name || stock.sector}</span>
+                <span>{displayName(stock, '')}</span>
               </div>
               <SignalBadge signal={stock.signal} strength={stock.signal_strength} />
             </button>

@@ -1,5 +1,6 @@
 import { useState, useCallback, memo } from 'react';
 import Skeleton from './Skeleton';
+import { displayName } from '../utils';
 
 function NewsPanel({ news, loading, stocks, onLoadSymbol, onOpenStock }) {
   const [query, setQuery] = useState('');
@@ -36,7 +37,7 @@ function NewsPanel({ news, loading, stocks, onLoadSymbol, onOpenStock }) {
         <input placeholder="Cari kode saham: BBCA, BBRI..." value={query} onChange={e => setQuery(e.target.value.toUpperCase())} />
         <button onClick={handleSearch}>Cari</button>
       </div>
-      {suggestions.length > 0 && <div className="news-suggestions">{suggestions.map(st => <button key={st.symbol} onClick={() => { setQuery(st.symbol); onLoadSymbol(st.symbol); }}>{st.symbol}<span>{st.name}</span></button>)}</div>}
+      {suggestions.length > 0 && <div className="news-suggestions">{suggestions.map(st => { const dn = displayName(st, ''); return (<button key={st.symbol} onClick={() => { setQuery(st.symbol); onLoadSymbol(st.symbol); }}>{st.symbol}{dn && <span>{dn}</span>}</button>); })}</div>}
     </div>
     {loading && (
       <div style={{ padding: '20px 0' }}>
